@@ -2862,9 +2862,6 @@ function updateMultiSelect(selectOrId, renderMenu = false) {
   if (!wrap || !wrap.classList.contains('multi-select')) return;
   const emptyLabel = select.options[0]?.textContent?.trim() || 'Todos';
   const options = [...select.options].filter(o => o.value);
-  if (renderMenu && selectedValues(select.id).length === 0) {
-    options.forEach(o => { o.selected = true; });
-  }
   const values = selectedValues(select.id);
   const labels = selectedLabels(select.id);
   const todasSelecionadas = options.length > 0 && options.every(o => o.selected);
@@ -2909,7 +2906,8 @@ function updateMultiSelect(selectOrId, renderMenu = false) {
     if (input.classList.contains('multi-select-search-input')) return;
     input.addEventListener('change', () => {
       if (!input.value) {
-        [...select.options].forEach(o => { if (o.value) o.selected = input.checked; });
+        const marcarTodas = options.some(o => !o.selected);
+        options.forEach(o => { o.selected = marcarTodas; });
         wrap.dataset.search = '';
       } else {
         const opt = [...select.options].find(o => o.value === input.value);
