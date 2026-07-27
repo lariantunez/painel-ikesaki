@@ -1896,8 +1896,7 @@ function combinarSelloutEstoquePorMes(vendasPorDia, estoquePorLojaDia) {
 }
 
 function shouldUseMonthlyMainChart(prefix, active) {
-  const lojaSelecionada = selectedValues(`${prefix}-loja`).length > 0;
-  return active.dim !== 'loja' && !lojaSelecionada;
+  return active.dim !== 'loja';
 }
 
 function setFirstChartTitle(tabId, title) {
