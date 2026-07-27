@@ -324,6 +324,22 @@ function dataParaISO(valor) {
   return null;
 }
 
+function normalizarNomeCampo(valor) {
+  return String(valor ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+function campoPorNomes(registro, nomes) {
+  const desejados = new Set(nomes.map(normalizarNomeCampo));
+  for (const [key, value] of Object.entries(registro || {})) {
+    if (desejados.has(normalizarNomeCampo(key))) return value;
+  }
+  return undefined;
+}
+
 function mesReferenciaParaISO(registro) {
   const valor =
     registro["Mês Referência"] ??
@@ -340,9 +356,25 @@ function mesReferenciaParaISO(registro) {
     registro["Data de Referencia"] ??
     registro["Referencia"] ??
     registro["Referência"];
-  const iso = dataParaISO(valor);
+  const valorNormalizado = valor ?? campoPorNomes(registro, [
+    "Mês Referência",
+    "Mês de Referência",
+    "Mes Referência",
+    "Mes de Referência",
+    "Mês Referencia",
+    "Mês de Referencia",
+    "Mes Referencia",
+    "Mes de Referencia",
+    "Data Referência",
+    "Data de Referência",
+    "Data Referencia",
+    "Data de Referencia",
+    "Referencia",
+    "Referência"
+  ]);
+  const iso = dataParaISO(valorNormalizado);
   if (iso) return `${iso.slice(0, 7)}-01`;
-  const texto = String(valor ?? "").trim();
+  const texto = String(valorNormalizado ?? "").trim();
   const mmAAAA = texto.match(/^(\d{1,2})[\/\-](\d{4})$/);
   if (mmAAAA) {
     const mes = Number(mmAAAA[1]);
