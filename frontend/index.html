@@ -288,7 +288,7 @@
   .adm-bar button:hover { border-color: #ff6b6b; color: #ff6b6b; }
 
   /* GESTÃO DE USUÁRIOS */
-  .gu-painel { max-width: 960px; margin: 0 auto; }
+  .gu-painel { max-width: 1180px; margin: 0 auto; }
   .gu-subtabs-nav { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: 28px; }
   .gu-subtab-btn { font-family: 'DM Mono', monospace; font-size: 0.76rem; color: var(--muted); background: none; border: none; border-bottom: 2px solid transparent; padding: 12px 22px; cursor: pointer; transition: color .2s, border-color .2s; white-space: nowrap; margin-bottom: -1px; letter-spacing: .4px; }
   .gu-subtab-btn:hover { color: var(--text); }
@@ -306,6 +306,8 @@
   .gu-table-wrap .td-user { font-family: 'DM Mono', monospace; font-size: 0.82rem; color: var(--accent2); }
   .gu-table-wrap .td-date { font-family: 'DM Mono', monospace; font-size: 0.74rem; color: var(--muted); }
   .gu-table-wrap .td-actions { display: flex; gap: 8px; justify-content: flex-end; }
+  .gu-logs-table { table-layout: fixed; }
+  .gu-logs-file { font-family:'DM Mono',monospace; font-size:0.78rem; color:var(--text-dim); line-height:1.35; overflow-wrap:anywhere; word-break:break-word; }
   .btn-gu { font-family: 'DM Mono', monospace; font-size: 0.72rem; padding: 5px 14px; border-radius: 6px; cursor: pointer; letter-spacing: .4px; transition: all .2s; white-space: nowrap; }
   .btn-gu.senha { background: transparent; border: 1px solid var(--border); color: var(--text-dim); }
   .btn-gu.senha:hover { border-color: var(--accent); color: var(--accent); }
@@ -827,7 +829,15 @@
         Histórico de arquivos importados. Clique em <strong style="color:#e87070">Desfazer</strong> para reverter uma importação incorreta · os dados importados seráo removidos do banco.
       </p>
       <div class="gu-table-wrap">
-        <table>
+        <table class="gu-logs-table">
+          <colgroup>
+            <col style="width:160px">
+            <col style="width:170px">
+            <col>
+            <col style="width:170px">
+            <col style="width:110px">
+            <col style="width:120px">
+          </colgroup>
           <thead>
             <tr>
               <th>Data / Hora</th>
@@ -7695,7 +7705,7 @@ async function guCarregarLogs() {
         <tr>
           <td class="td-date">${data} ${hora}</td>
           <td style="font-family:'DM Mono',monospace;font-size:0.82rem">${escHtml(l.usuario || '?')}</td>
-          <td style="font-family:'DM Mono',monospace;font-size:0.78rem;color:var(--text-dim);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(l.arquivo || '')}">${escHtml(l.arquivo || '?')}</td>
+          <td class="gu-logs-file" title="${escHtml(l.arquivo || '')}">${escHtml(l.arquivo || '?')}</td>
           <td style="font-family:'DM Mono',monospace;font-size:0.75rem;color:var(--accent2)">${escHtml(tipo)}</td>
           <td style="text-align:right;font-family:'DM Mono',monospace;font-size:0.82rem">${l.total ?? '?'}</td>
           <td>
