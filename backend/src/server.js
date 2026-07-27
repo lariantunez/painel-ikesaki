@@ -2640,6 +2640,13 @@ async function iniciarServidor() {
         });
       }
       try { fs.unlinkSync(req.file.path); } catch (_) {}
+      const colunas = new Set(linhas.flatMap(linha => Object.keys(linha || {}).map(k => String(k).trim())));
+      const temDataContagem = colunas.has("Data da Contagem") || colunas.has("Data") || colunas.has("data_contagem");
+      const temEAN = colunas.has("EAN") || colunas.has("Ean") || colunas.has("GTIN/PLU") || colunas.has("CODBARRAS");
+      const temQuantidade = colunas.has("Quantidade em Estoque") || colunas.has("Quantidade") || colunas.has("Estoque");
+      if (!temDataContagem || !temEAN || !temQuantidade) {
+        throw new Error("Arquivo invalido para Estoque Manual. Baixe e preencha o modelo correto, com Data da Contagem, Filial, EAN e Quantidade em Estoque.");
+      }
       const registros = linhas
         .map(linha => prepararRegistroEstoqueManual(linha, categoriasPorGtin, importId))
         .filter(r => r._data_iso && r._gtin && Number.isFinite(r._qtd_num));
@@ -2827,7 +2834,7 @@ async function iniciarServidor() {
         res.json({ ok: true, inserido, ultimo: true, mensagem: "Estoque manual importado" });
       } catch (error) {
         try { if (req.file?.path) fs.unlinkSync(req.file.path); } catch (_) {}
-        res.status(500).json({ erro: "Erro ao salvar estoque manual", detalhe: error.message });
+        res.status(400).json({ erro: error.message || "Erro ao salvar estoque manual", detalhe: error.message });
       }
     });
 

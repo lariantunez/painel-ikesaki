@@ -2246,7 +2246,7 @@ async function enviarXLSX(inputId, rota) {
     }
 
     const data = resultado.data;
-    if (!resultado.ok) throw new Error(data.erro || data.detalhe || 'Erro desconhecido');
+    if (!resultado.ok) throw new Error(data.detalhe || data.erro || 'Erro desconhecido');
     atualizarProgressoImportacao(status, 100, 'Importacao concluida.');
 
     status.innerHTML = `✓ Importação concluída · <strong>${(data.inserido || 0).toLocaleString('pt-BR')}</strong> registros inseridos.`;
