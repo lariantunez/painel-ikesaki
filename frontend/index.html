@@ -1569,8 +1569,9 @@ const tabsRenderizadas = new Set();
 const filtrosConstruidos = new Set();
 const DASHBOARD_CACHE_BUST_KEY = 'ikesaki_dashboard_cache_bust';
 const AGRE_CACHE_PREFIX = 'agre_v8__';
-const DASHBOARD_CACHE_SCHEMA = 'monthly-main-v1';
+const DASHBOARD_CACHE_SCHEMA = 'monthly-main-v2';
 const DASHBOARD_CACHE_SCHEMA_KEY = 'ikesaki_dashboard_cache_schema';
+const AGRE_CACHE_TTL_MS = 2 * 60 * 1000;
 
 function agreCache(key, data) {
   const cacheKey = `${AGRE_CACHE_PREFIX}${key}`;
@@ -1582,13 +1583,13 @@ function agreCache(key, data) {
   }
 
   const mem = _agreMemCache.get(cacheKey);
-  if (mem && Date.now() - mem.ts < 60 * 60 * 1000) return mem.data;
+  if (mem && Date.now() - mem.ts < AGRE_CACHE_TTL_MS) return mem.data;
 
   try {
     const raw = sessionStorage.getItem(cacheKey);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    if (!parsed || Date.now() - parsed.ts >= 60 * 60 * 1000) {
+    if (!parsed || Date.now() - parsed.ts >= AGRE_CACHE_TTL_MS) {
       sessionStorage.removeItem(cacheKey);
       return null;
     }
@@ -2354,6 +2355,12 @@ async function init() {
           lojas: Array.isArray(filtros.lojas) ? filtros.lojas : []
         };
       } catch(e) {}
+    }
+
+    if (resumoRes.status === 'fulfilled') {
+      const resumoAtual = resumoRes.value || {};
+      const totalAtual = Number(resumoAtual.total_vendido || 0) + Number(resumoAtual.total_valor || 0) + Number(resumoAtual.total_lojas || 0);
+      if (totalAtual <= 0) limparCacheDashboard(false);
     }
 
     if (brutosRes.status !== 'fulfilled') {
