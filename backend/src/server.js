@@ -385,7 +385,12 @@ function brValorExpr() {
 function matchTextoOuNumero(valor) {
   const s = String(valor);
   const n = Number(s);
-  return Number.isFinite(n) && s.trim() !== "" ? { $in: [s, n] } : s;
+  if (Number.isFinite(n) && s.trim() !== "") {
+    const itens = [s, n];
+    if (/^\d+$/.test(s.trim())) itens.push(new RegExp(`^${escapeRegExp(s.trim())}\\s*-`));
+    return { $in: itens };
+  }
+  return s;
 }
 
 const MESES_ABREV = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
@@ -426,12 +431,17 @@ function listaParam(valor) {
   return base.map(v => String(v ?? "").trim()).filter(Boolean);
 }
 
+function escapeRegExp(valor) {
+  return String(valor ?? "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function matchTextoOuNumeroLista(valores) {
   const itens = [];
   listaParam(valores).forEach(valor => {
     itens.push(valor);
     const numero = Number(valor);
     if (!Number.isNaN(numero)) itens.push(numero);
+    if (/^\d+$/.test(valor)) itens.push(new RegExp(`^${escapeRegExp(valor)}\\s*-`));
   });
   const unicos = [...new Set(itens)];
   if (!unicos.length) return null;

@@ -2298,9 +2298,13 @@ async function init() {
           const keys    = Object.keys(r).filter(k => k !== '_id');
           const codKey  = keys.find(k => /cod.?loja|codigo.?loja|cod_loja|loja|filial/i.test(k)) || keys[0];
           const nomeKey = keys.find(k => /nome.?fantasia|nome_fantasia|nome.?loja|nome|fantasia/i.test(k)) || keys[1];
-          const cod  = normCodLoja((r[codKey]  || '').toString().trim());
+          const rawCod = (r[codKey] || '').toString().trim();
+          const cod  = normCodLoja(rawCod);
           const nome = (r[nomeKey] || '').toString().trim();
-          if (cod && nome) deParaMap[cod] = nome;
+          if (cod && nome) {
+            deParaMap[cod] = nome;
+            if (rawCod) deParaMap[rawCod] = nome;
+          }
         });
       } catch(e) { console.warn('De-Para de lojas não carregado:', e.message); }
     } else { console.warn('De-Para de lojas não carregado:', deParaRes.reason?.message); }
@@ -2445,8 +2449,9 @@ function parseBR(raw) {
 
 function normCodLoja(v) {
   const s = String(v ?? '').trim();
-  const n = parseInt(s, 10);
-  return !isNaN(n) ? String(n) : s;
+  const m = s.match(/^\s*(\d+)/);
+  if (m) return String(Number(m[1]));
+  return s;
 }
 
 
@@ -2925,10 +2930,10 @@ function filtroLojas(apenasComDePara = false) {
   const base = filterOptions.lojas.length
     ? filterOptions.lojas
     : [...new Set(rawData.map(r => col(r,'Loja','loja')).filter(Boolean))];
-  return base
-    .map(l => String(l).trim())
-    .filter(l => l && (!apenasComDePara || deParaMap[l]))
-    .sort((a,b) => +a - +b);
+  return [...new Set(base
+    .map(l => normCodLoja(String(l).trim()))
+    .filter(l => l && (!apenasComDePara || nomeLojaDePara(l))))]
+    .sort((a,b) => Number(a) - Number(b));
 }
 
 function filtroProdutos() {
