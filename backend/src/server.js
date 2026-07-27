@@ -31,7 +31,28 @@ const dbName = process.env.DB_NAME || "ikesaki_dashboard";
 const READ_ONLY = /^(1|true|yes|sim)$/i.test(process.env.READ_ONLY || "");
 const USUARIO_PAI_PADRAO = "larissa antunez";
 
-const client = new MongoClient(uri);
+let httpServer = null;
+let mongoReady = false;
+let mongoErro = "";
+
+function iniciarHttpServer() {
+  if (httpServer) return httpServer;
+  httpServer = app.listen(PORT, () => {
+    console.log(`Servidor rodando na porta ${PORT}`);
+  });
+  httpServer.timeout = 10 * 60 * 1000;
+  httpServer.keepAliveTimeout = 10 * 60 * 1000;
+  return httpServer;
+}
+
+app.get("/api/health", (_req, res) => {
+  res.status(mongoReady ? 200 : 503).json({
+    ok: mongoReady,
+    db: dbName,
+    mongo: mongoReady ? "connected" : "connecting",
+    erro: mongoReady ? null : (mongoErro || null)
+  });
+});
 
 const WRITE_METHODS = new Set([
   "bulkWrite",
@@ -641,6 +662,9 @@ function filtroMesDivergente() {
 // ─────────────────────────────────────────
 async function iniciarServidor() {
   try {
+    iniciarHttpServer();
+    if (!uri) throw new Error("MONGODB_URI nao configurada.");
+    const client = new MongoClient(uri);
     await client.connect();
     const db = READ_ONLY ? criarDbSomenteLeitura(client.db(dbName)) : client.db(dbName);
 
@@ -2997,14 +3021,16 @@ async function iniciarServidor() {
     });
 
     // ─────────────────────────────────────
-    const server = app.listen(PORT, () => {
-      console.log(`🚀 Servidor rodando na porta ${PORT}`);
-    });
+    const server = iniciarHttpServer();
     // Aumenta timeout para suportar imports de arquivos grandes
     server.timeout        = 10 * 60 * 1000; // 10 minutos
     server.keepAliveTimeout = 10 * 60 * 1000;
+    mongoReady = true;
+    mongoErro = "";
 
   } catch (erro) {
+    mongoReady = false;
+    mongoErro = erro?.message || String(erro);
     console.error("❌ Erro ao iniciar servidor:", erro);
   }
 }
