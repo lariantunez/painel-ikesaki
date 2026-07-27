@@ -557,6 +557,19 @@ function matchListaTexto(valor) {
   return valores.length === 1 ? valores[0] : { $in: valores };
 }
 
+function adicionarChavesCategoriaMapa(map, categoria) {
+  const chaves = [
+    ...(Array.isArray(categoria.CODBARRAS_LOOKUP) ? categoria.CODBARRAS_LOOKUP : []),
+    categoria.CODBARRAS,
+    categoria.GTIN_IKESAKI,
+    categoria.CODBARRAS_KERT,
+    categoria.EAN
+  ].map(normalizarEAN).filter(Boolean);
+  [...new Set(chaves)].forEach(chave => {
+    if (!map.has(chave)) map.set(chave, categoria);
+  });
+}
+
 function produtoNomeExpr() {
   return {
     $ifNull: [
@@ -765,6 +778,26 @@ async function iniciarServidor() {
       return `${prefix}:${await dadosVersion()}:${JSON.stringify(query)}`;
     }
 
+    async function recomputarCategoriasDadosBrutos(filtro = {}) {
+      await db.collection("dados_brutos").aggregate([
+        { $match: filtro },
+        { $set: { _gtin_lookup: { $toString: { $ifNull: ["$_gtin", { $getField: "GTIN/PLU" }] } } } },
+        { $lookup: {
+            from: "categorias_depara",
+            localField: "_gtin_lookup",
+            foreignField: "CODBARRAS_LOOKUP",
+            as: "_cjoin"
+        }},
+        { $set: {
+            _cat: { $arrayElemAt: ["$_cjoin.CATEGORIA", 0] },
+            _fam: { $arrayElemAt: ["$_cjoin.FAMILIA", 0] }
+        }},
+        { $unset: ["_cjoin", "_gtin_lookup"] },
+        { $merge: { into: "dados_brutos", whenMatched: "merge", whenNotMatched: "discard" } }
+      ], { allowDiskUse: true }).toArray();
+      cacheClear();
+    }
+
     async function mapaNomesLojas() {
       const rows = await db.collection("lojas_depara")
         .find({}, { projection: { Cod_Loja: 1, Nome_Fantasia: 1 } })
@@ -886,7 +919,7 @@ async function iniciarServidor() {
           const catCnt = await db.collection("categorias_depara").estimatedDocumentCount();
           _catCountCache = catCnt;
           if (catCnt > 0) {
-            const catPendente = { _cat: { $exists: false } };
+            const catPendente = { $or: [{ _cat: { $exists: false } }, { _cat: null }, { _fam: { $exists: false } }, { _fam: null }] };
             const semCat = await db.collection("dados_brutos").countDocuments(catPendente);
             if (semCat > 0) {
               await db.collection("dados_brutos").aggregate([
@@ -895,7 +928,7 @@ async function iniciarServidor() {
                 { $lookup: {
                     from: "categorias_depara",
                     localField: "_gtin_lookup",
-                    foreignField: "CODBARRAS",
+                    foreignField: "CODBARRAS_LOOKUP",
                     as: "_cjoin"
                 }},
                 { $set: {
@@ -1039,7 +1072,8 @@ async function iniciarServidor() {
       db.collection("estoque_manual").createIndex({ "_data_iso": -1 }),
       db.collection("estoque_manual").createIndex({ "_gtin": 1 }),
       db.collection("estoque_manual").createIndex({ "_cat": 1 }),
-      db.collection("categorias_depara").createIndex({ "CODBARRAS": 1 })
+      db.collection("categorias_depara").createIndex({ "CODBARRAS": 1 }),
+      db.collection("categorias_depara").createIndex({ "CODBARRAS_LOOKUP": 1 })
     ]);
     console.log("📊 Índices de dashboard criados/verificados");
 
@@ -1757,10 +1791,17 @@ async function iniciarServidor() {
       try {
         const dados = await db.collection("dados_brutos").aggregate([
           {
+            $set: {
+              _gtin_tratado_lookup: {
+                $toString: { $ifNull: ["$_gtin", { $getField: "GTIN/PLU" }] }
+              }
+            }
+          },
+          {
             $lookup: {
               from: "categorias_depara",
-              localField: "GTIN/PLU",
-              foreignField: "CODBARRAS",
+              localField: "_gtin_tratado_lookup",
+              foreignField: "CODBARRAS_LOOKUP",
               as: "categoria_info"
             }
           },
@@ -1791,7 +1832,7 @@ async function iniciarServidor() {
               Nome_Loja_DePara: { $arrayElemAt: ["$loja_info.Nome_Fantasia", 0] }
             }
           },
-          { $project: { categoria_info: 0, loja_info: 0 } }
+          { $project: { categoria_info: 0, loja_info: 0, _gtin_tratado_lookup: 0 } }
         ]).toArray();
 
         res.json(dados);
@@ -1915,14 +1956,14 @@ async function iniciarServidor() {
         // garantir comparação correta independente do tipo (número vs string).
         const joinCat = _migGtin
           ? [
-              { $lookup: { from: "categorias_depara", localField: "_gtin", foreignField: "CODBARRAS", as: "_c" } },
+              { $lookup: { from: "categorias_depara", localField: "_gtin", foreignField: "CODBARRAS_LOOKUP", as: "_c" } },
               { $addFields: { _cat: { $ifNull: [{ $arrayElemAt: ["$_c.CATEGORIA", 0] }, "$_cat"] }, _fam: { $ifNull: [{ $arrayElemAt: ["$_c.FAMILIA", 0] }, "$_fam"] }, _prod: produtoDeParaExpr() } }
             ]
           : [
               { $lookup: {
                   from: "categorias_depara",
                   let: { gtin: { $toString: { $ifNull: ["$_gtin", { $getField: "GTIN/PLU" }] } } },
-                  pipeline: [{ $match: { $expr: { $eq: ["$$gtin", { $toString: "$CODBARRAS" }] } } }],
+                  pipeline: [{ $match: { $expr: { $in: ["$$gtin", { $ifNull: ["$CODBARRAS_LOOKUP", [{ $toString: "$CODBARRAS" }]] }] } } }],
                   as: "_c"
               }},
               { $addFields: { _cat: { $ifNull: [{ $arrayElemAt: ["$_c.CATEGORIA", 0] }, "$_cat"] }, _fam: { $ifNull: [{ $arrayElemAt: ["$_c.FAMILIA", 0] }, "$_fam"] }, _prod: produtoDeParaExpr() } }
@@ -2176,7 +2217,7 @@ async function iniciarServidor() {
         if (produto && !produto_gtin) {
           preStages.push(
             { $addFields: { _gtin_prod_lookup: { $toString: { $ifNull: ["$_gtin", { $getField: "GTIN/PLU" }] } } } },
-            { $lookup: { from: "categorias_depara", localField: "_gtin_prod_lookup", foreignField: "CODBARRAS", as: "_c" } },
+            { $lookup: { from: "categorias_depara", localField: "_gtin_prod_lookup", foreignField: "CODBARRAS_LOOKUP", as: "_c" } },
             { $addFields: { _prod: produtoDeParaExpr() } },
             { $unset: ["_c", "_gtin_prod_lookup"] },
             { $match: { _prod: matchListaTexto(produto) } }
@@ -2270,7 +2311,7 @@ async function iniciarServidor() {
               $lookup: {
                 from: "categorias_depara",
                 localField: "_gtin_atual_lookup",
-                foreignField: "CODBARRAS",
+                foreignField: "CODBARRAS_LOOKUP",
                 as: "_cat_atual_join"
               }
             },
@@ -2296,7 +2337,7 @@ async function iniciarServidor() {
         if (produto && !produto_gtin) {
           preStages.push(
             { $addFields: { _gtin_prod_lookup: { $toString: { $ifNull: ["$_gtin", { $getField: "GTIN/PLU" }] } } } },
-            { $lookup: { from: "categorias_depara", localField: "_gtin_prod_lookup", foreignField: "CODBARRAS", as: "_c" } },
+            { $lookup: { from: "categorias_depara", localField: "_gtin_prod_lookup", foreignField: "CODBARRAS_LOOKUP", as: "_c" } },
             { $addFields: { _prod: produtoDeParaExpr() } },
             { $unset: ["_c", "_gtin_prod_lookup"] },
             { $match: { _prod: matchListaTexto(produto) } }
@@ -2573,9 +2614,10 @@ async function iniciarServidor() {
       let categoriasPorGtin = null;
       if (colecao.collectionName === 'dados_brutos') {
         const categorias = await db.collection("categorias_depara")
-          .find({}, { projection: { CODBARRAS: 1, CATEGORIA: 1, FAMILIA: 1 } })
+          .find({}, { projection: { CODBARRAS: 1, CODBARRAS_LOOKUP: 1, GTIN_IKESAKI: 1, CODBARRAS_KERT: 1, CATEGORIA: 1, FAMILIA: 1 } })
           .toArray();
-        categoriasPorGtin = new Map(categorias.map(c => [String(c.CODBARRAS || '').trim(), c]));
+        categoriasPorGtin = new Map();
+        categorias.forEach(c => adicionarChavesCategoriaMapa(categoriasPorGtin, c));
       }
 
       return new Promise((resolve, reject) => {
@@ -2657,9 +2699,10 @@ async function iniciarServidor() {
       let categoriasPorGtin = null;
       if (colecao.collectionName === 'dados_brutos') {
         const categorias = await db.collection("categorias_depara")
-          .find({}, { projection: { CODBARRAS: 1, CATEGORIA: 1, FAMILIA: 1 } })
+          .find({}, { projection: { CODBARRAS: 1, CODBARRAS_LOOKUP: 1, GTIN_IKESAKI: 1, CODBARRAS_KERT: 1, CATEGORIA: 1, FAMILIA: 1 } })
           .toArray();
-        categoriasPorGtin = new Map(categorias.map(c => [String(c.CODBARRAS || '').trim(), c]));
+        categoriasPorGtin = new Map();
+        categorias.forEach(c => adicionarChavesCategoriaMapa(categoriasPorGtin, c));
       }
 
       const workbook = XLSX.readFile(req.file.path, { type: 'file', raw: true });
@@ -2682,7 +2725,14 @@ async function iniciarServidor() {
           }
         });
         if (colecao.collectionName === 'categorias_depara') {
-          registro.CODBARRAS = normalizarEAN(registro.CODBARRAS ?? registro.GTIN_IKESAKI ?? registro.CODBARRAS_KERT ?? registro.EAN);
+          const chaves = [
+            registro.CODBARRAS,
+            registro.GTIN_IKESAKI,
+            registro.CODBARRAS_KERT,
+            registro.EAN
+          ].map(normalizarEAN).filter(Boolean);
+          registro.CODBARRAS_LOOKUP = [...new Set(chaves)];
+          registro.CODBARRAS = registro.CODBARRAS_LOOKUP[0] || null;
           registro.CATEGORIA = limparTextoExibicao(registro.CATEGORIA ?? registro.CATEGORIA_KERT);
           registro.FAMILIA = limparTextoExibicao(registro.FAMILIA ?? registro.FAMILIA_KERT);
           registro["NOME PRODUTO"] = limparTextoExibicao(registro["NOME PRODUTO"] ?? registro["NOME PRODUTO_KERT"] ?? registro.PRODUTO_IKESAKI);
@@ -2703,9 +2753,11 @@ async function iniciarServidor() {
 
     async function carregarCategoriasPorGtin() {
       const categorias = await db.collection("categorias_depara")
-        .find({}, { projection: { CODBARRAS: 1, CATEGORIA: 1, FAMILIA: 1, "NOME PRODUTO": 1 } })
+        .find({}, { projection: { CODBARRAS: 1, CODBARRAS_LOOKUP: 1, GTIN_IKESAKI: 1, CODBARRAS_KERT: 1, CATEGORIA: 1, FAMILIA: 1, "NOME PRODUTO": 1 } })
         .toArray();
-      return new Map(categorias.map(c => [String(c.CODBARRAS || '').trim(), c]));
+      const map = new Map();
+      categorias.forEach(c => adicionarChavesCategoriaMapa(map, c));
+      return map;
     }
 
     function prepararRegistroEstoqueManual(linha, categoriasPorGtin, importId) {
@@ -2911,6 +2963,8 @@ async function iniciarServidor() {
         });
         cacheClear();
         _migCat = false; _catCountCache = -1;
+        await recomputarCategoriasDadosBrutos({});
+        _migCat = true;
         res.json({ ok: true, inserido, ultimo: true, mensagem: "Categorias importadas" });
       } catch (error) {
         res.status(500).json({ erro: "Erro ao salvar no banco de dados", detalhe: error.message });
