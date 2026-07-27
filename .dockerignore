@@ -1,0 +1,14 @@
+.git
+.env
+node_modules
+backend/node_modules
+uploads
+backend/uploads
+Base de dados
+*.csv
+*.xlsx
+*.jpg
+*.JPG
+*.png
+*.PNG
+npm-debug.log*
