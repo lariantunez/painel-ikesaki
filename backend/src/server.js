@@ -324,6 +324,38 @@ function dataParaISO(valor) {
   return null;
 }
 
+function mesReferenciaParaISO(registro) {
+  const valor =
+    registro["Mês Referência"] ??
+    registro["Mês de Referência"] ??
+    registro["Mes Referência"] ??
+    registro["Mes de Referência"] ??
+    registro["Mês Referencia"] ??
+    registro["Mês de Referencia"] ??
+    registro["Mes Referencia"] ??
+    registro["Mes de Referencia"] ??
+    registro["Data Referência"] ??
+    registro["Data de Referência"] ??
+    registro["Data Referencia"] ??
+    registro["Data de Referencia"] ??
+    registro["Referencia"] ??
+    registro["Referência"];
+  const iso = dataParaISO(valor);
+  if (iso) return `${iso.slice(0, 7)}-01`;
+  const texto = String(valor ?? "").trim();
+  const mmAAAA = texto.match(/^(\d{1,2})[\/\-](\d{4})$/);
+  if (mmAAAA) {
+    const mes = Number(mmAAAA[1]);
+    if (mes >= 1 && mes <= 12) return `${mmAAAA[2]}-${String(mes).padStart(2, "0")}-01`;
+  }
+  const mesTexto = texto.match(/^([A-Za-zÀ-ÿ]{3,})[\/\-\s]+(\d{4})$/);
+  if (mesTexto) {
+    const mes = MESES_ABREV.indexOf(normalizarMes(mesTexto[1])) + 1;
+    if (mes > 0) return `${mesTexto[2]}-${String(mes).padStart(2, "0")}-01`;
+  }
+  return null;
+}
+
 function isoParaBR(iso) {
   const m = String(iso || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
   return m ? `${m[3]}/${m[2]}/${m[1]}` : "";
@@ -334,10 +366,23 @@ function canonizarLinhaIkesaki(registro) {
   if (dataIso) {
     registro.Data = isoParaBR(dataIso);
     registro._data_iso = dataIso;
+    registro._data_diaria = true;
     registro.Ano = Number(dataIso.slice(0, 4));
     const mesNum = Number(dataIso.slice(5, 7));
     registro["Mês"] = MESES_ABREV[mesNum - 1];
+    registro["MÃªs"] = MESES_ABREV[mesNum - 1];
     registro.Mes = mesNum;
+  } else {
+    const refIso = mesReferenciaParaISO(registro);
+    if (refIso) {
+      registro._data_iso = refIso;
+      registro._data_diaria = false;
+      registro.Ano = Number(refIso.slice(0, 4));
+      const mesNum = Number(refIso.slice(5, 7));
+      registro["Mês"] = MESES_ABREV[mesNum - 1];
+      registro["MÃªs"] = MESES_ABREV[mesNum - 1];
+      registro.Mes = mesNum;
+    }
   }
   if (registro.Filial !== undefined && registro.Loja === undefined) {
     registro.Loja = limparTextoExibicao(registro.Filial);
@@ -1000,8 +1045,8 @@ async function iniciarServidor() {
         exemplo:  ["001", "Loja Centro"]
       },
       "modelo_dados_brutos_ikesaki.xlsx": {
-        colunas: ["Data", "Filial", "Fornecedor", "Marca", "Codigo", "Descricao", "Ean", "Faturamento (Unid)", "Faturamento (R$)"],
-        exemplo:  ["01/01/2026", "116 - Praia Mar", "KERT", "KERATON", "27958", "LEAVE IN KERATON 200ML USO ESSENCIAL", "7896380660612", 7, 230.30]
+        colunas: ["Data", "Mês Referência", "Filial", "Fornecedor", "Marca", "Codigo", "Descricao", "Ean", "Faturamento (Unid)", "Faturamento (R$)"],
+        exemplo:  ["01/01/2026", "", "116 - Praia Mar", "KERT", "KERATON", "27958", "LEAVE IN KERATON 200ML USO ESSENCIAL", "7896380660612", 7, 230.30]
       },
       "modelo_estoque_manual_ikesaki.xlsx": {
         colunas: ["Data da Contagem", "Filial", "Categoria", "Nome do Produto", "EAN", "Quantidade em Estoque"],
@@ -1931,6 +1976,7 @@ async function iniciarServidor() {
           ],
           por_dia: [
             ...mLoja, ...mCat, ...mFamilia,
+            ...(incluirDiaDetalhado ? [{ $match: { _data_diaria: { $ne: false } } }] : []),
             { $group: { _id: dateGroupExpr, ...grp } },
             { $sort: { _id: 1 } }
           ]
@@ -1952,11 +1998,13 @@ async function iniciarServidor() {
         if (incluirDiaDetalhado) {
           facets.por_cat_dia = [
             ...mLoja, ...mFamilia,
+            { $match: { _data_diaria: { $ne: false } } },
             { $group: { _id: { cat: "$_cat", data: dateGroupExpr }, ...grp } },
             { $sort: { "_id.data": 1, qty: -1 } }
           ];
           facets.por_fam_dia = [
             ...mLoja, ...mCat,
+            { $match: { _data_diaria: { $ne: false } } },
             { $group: { _id: { fam: "$_fam", data: dateGroupExpr }, ...grp } },
             { $sort: { "_id.data": 1, qty: -1 } }
           ];
@@ -2478,10 +2526,13 @@ async function iniciarServidor() {
       const isoMatch = dataStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
       if (brMatch) {
         registro._data_iso = `${brMatch[3]}-${brMatch[2].padStart(2,'0')}-${brMatch[1].padStart(2,'0')}`;
+        registro._data_diaria = true;
       } else if (isoMatch) {
         registro._data_iso = dataStr;
-      } else {
+        registro._data_diaria = true;
+      } else if (!registro._data_iso) {
         registro._data_iso = null;
+        registro._data_diaria = false;
       }
       return registro;
     }
@@ -2545,6 +2596,7 @@ async function iniciarServidor() {
             } else {
               registro._data_iso = null;
             }
+            prepararRegistroDadosBrutos(registro, categoriasPorGtin);
           }
 
           resultados.push(registro);
