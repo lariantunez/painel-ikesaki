@@ -1120,19 +1120,61 @@ async function iniciarServidor() {
       }
     };
 
+    const TEMPLATES_DINAMICOS = [
+      { filename: "modelo_dados_brutos_ikesaki.xlsx", nome: "Dados Brutos Ikesaki", tipo: "dados_brutos" },
+      { filename: "modelo_estoque_manual_ikesaki.xlsx", nome: "Estoque Manual Ikesaki", tipo: "estoque_manual" },
+      { filename: "modelo_categorias_depara.xlsx", nome: "De/Para Categorias", tipo: "categorias_depara" },
+      { filename: "modelo_lojas_depara.csv", nome: "De/Para Lojas", tipo: "lojas_depara" }
+    ];
+
+    function enviarXlsx(res, filename, sheetName, colunas, linhas, colunasTexto = []) {
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.aoa_to_sheet([colunas, ...linhas]);
+      const textoSet = new Set(colunasTexto);
+      ws["!cols"] = colunas.map(col => textoSet.has(col) ? { wch: 22, numFmt: "@" } : { wch: 20 });
+      ws["!autofilter"] = { ref: `A1:${XLSX.utils.encode_col(colunas.length - 1)}${linhas.length + 1}` };
+      colunas.forEach((col, idx) => {
+        if (!textoSet.has(col)) return;
+        for (let row = 2; row <= linhas.length + 1; row++) {
+          const addr = XLSX.utils.encode_cell({ r: row - 1, c: idx });
+          if (ws[addr]) { ws[addr].t = "s"; ws[addr].z = "@"; }
+        }
+      });
+      XLSX.utils.book_append_sheet(wb, ws, sheetName);
+      const buffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      return res.send(buffer);
+    }
+
     // Download público — sem autenticação
     app.get("/api/templates/:filename", async (req, res) => {
       try {
         const { filename } = req.params;
 
         // Se há binário customizado salvo pelo usuário, serve ele com prioridade
-        if (filename.endsWith(".xlsx")) {
-          const stored = await db.collection("templates_importacao").findOne({ filename });
-          if (stored?.conteudoBase64) {
-            res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-            res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-            return res.send(Buffer.from(stored.conteudoBase64, "base64"));
-          }
+        if (filename === "modelo_dados_brutos_ikesaki.xlsx") {
+          const ultimoLog = await db.collection("logs_importacao")
+            .find({ tipo: "dados_brutos", importId: { $exists: true, $ne: null } })
+            .sort({ data: -1 })
+            .limit(1)
+            .next();
+          const filtro = ultimoLog?.importId ? { _import_id: ultimoLog.importId } : {};
+          const docs = await db.collection("dados_brutos")
+            .find(filtro)
+            .sort({ _data_iso: 1, Loja: 1, Descricao: 1 })
+            .toArray();
+          const colunasPreferidas = TEMPLATES_XLSX[filename].colunas;
+          const colunasExtras = [...new Set(docs.flatMap(doc => Object.keys(doc)))]
+            .filter(col => !col.startsWith("_") && !["_id", "importado_em"].includes(col) && !colunasPreferidas.includes(col));
+          const colunas = [...colunasPreferidas, ...colunasExtras];
+          const linhas = docs.length
+            ? docs.map(doc => colunas.map(col => {
+                if (col === "Data" && doc._data_iso) return isoParaBR(doc._data_iso);
+                return limparTextoExibicao(doc[col] ?? "");
+              }))
+            : [TEMPLATES_XLSX[filename].exemplo];
+          return enviarXlsx(res, filename, "Dados Brutos", colunas, linhas, ["Ean", "GTIN/PLU"]);
         }
 
         if (filename === "modelo_estoque_manual_ikesaki.xlsx") {
@@ -1304,11 +1346,16 @@ async function iniciarServidor() {
     // Listar templates (admin)
     app.get("/api/admin/templates", verificarTokenAdmin, async (req, res) => {
       try {
-        const templates = await db
-          .collection("templates_importacao")
-          .find({}, { projection: { conteudo: 0 } })
-          .sort({ nome: 1 })
-          .toArray();
+        const logs = await db.collection("logs_importacao").aggregate([
+          { $sort: { data: -1 } },
+          { $group: { _id: "$tipo", data: { $first: "$data" } } }
+        ]).toArray();
+        const dataPorTipo = new Map(logs.map(log => [log._id, log.data]));
+        const templates = TEMPLATES_DINAMICOS.map(t => ({
+          filename: t.filename,
+          nome: t.nome,
+          atualizadoEm: dataPorTipo.get(t.tipo) || null
+        }));
         res.json(templates);
       } catch (error) {
         res.status(500).json({ erro: "Erro ao listar templates." });

@@ -798,7 +798,7 @@
     <!-- Sub-aba: Modelos de Importação -->
     <div id="gu-sub-modelos" class="gu-subpanel">
       <p style="font-family:'DM Mono',monospace;font-size:0.78rem;color:var(--text-dim);margin-bottom:20px;line-height:1.6">
-        Arquivos usados como modelo na area de importação. Clique em <strong style="color:var(--text)">Subir Novo</strong> para substituir um modelo pelo seu arquivo atualizado.
+        Modelos gerados com as informações atuais do sistema. Use <strong style="color:var(--text)">Baixar</strong> para obter o arquivo atualizado antes de preencher uma nova importação.
       </p>
       <div class="gu-table-wrap">
         <table>
@@ -7710,6 +7710,7 @@ async function guCarregarModelos() {
           </td>
         </tr>`;
     }).join('');
+    tbody.querySelectorAll('label.btn-gu.novo').forEach(el => el.remove());
 
   } catch (err) {
     tbody.innerHTML = '<tr><td colspan="3"><div class="no-data err">Erro ao carregar modelos.</div></td></tr>';
