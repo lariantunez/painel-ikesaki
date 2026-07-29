@@ -2456,7 +2456,7 @@ function normCodLoja(v) {
 
 function nomeLojaDePara(loja) {
   const raw = String(loja ?? '').trim();
-  if (!raw) return '';
+  if (!raw) return 'SEM FILIAL';
   const norm = normCodLoja(raw);
   const padded = /^\d+$/.test(norm) ? norm.padStart(2, '0') : norm;
   return deParaMap[raw] || deParaMap[norm] || deParaMap[padded] || `Filial ${norm || raw}`;
@@ -3207,9 +3207,9 @@ async function renderizar() {
     .map(r => {
       const loja = normCodLoja(String(r.loja||''));
       const nome = nomeLojaDePara(loja);
-      return { loja, nome, qty: r.qty };
+      return { loja, nome, qty: r.qty, semFilial: !loja };
     })
-    .filter(r => r.loja);
+    .filter(r => Number(r.qty || 0) !== 0 || r.loja);
   const totalFiltrado = (ag, byLoja) => ag && ag.por_dia
     ? ag.por_dia.reduce((s, r) => s + (r.qty || 0), 0)
     : byLoja.reduce((s, r) => s + r.qty, 0);
@@ -3384,7 +3384,11 @@ function renderGrafico(byLoja, ag) {
     return `rgba(${Math.round(200-t*80)},${Math.round(241-t*100)},${Math.round(53+t*100)},1)`;
   });
   const tickColor = ctx => !sel || monthlyByLabel ? chartTickColor() : byLoja[ctx.index]?.loja === sel ? chartMonthlyColor('sellout').solid : chartInactiveTick();
-  const onClickLoja = monthlyByLabel ? null : (evt, elements) => { if (elements.length > 0) fSetFilter('loja', byLoja[elements[0].index].loja); };
+  const onClickLoja = monthlyByLabel ? null : (evt, elements) => {
+    if (elements.length === 0) return;
+    const loja = byLoja[elements[0].index]?.loja;
+    if (loja) fSetFilter('loja', loja);
+  };
 
   // Atualiza gráfico existente no lugar (sem destruir/recriar â†’ sem animação de entrada)
   if (chartInst) {
@@ -3798,8 +3802,10 @@ function renderTabela(byLoja) {
     const pct  = total > 0 ? ((r.qty/total)*100).toFixed(1) : 0;
     const barW = ((r.qty/maxQ)*100).toFixed(1);
     const ativo = sel1 === r.loja ? ' row-active' : '';
-    return `<tr class="clickable-row${ativo}" onclick="fSetFilter('loja','${r.loja}')">
-      <td class="td-loja">#${r.loja}</td>
+    const click = r.loja ? ` class="clickable-row${ativo}" onclick="fSetFilter('loja','${r.loja}')"` : '';
+    const lojaLabel = r.loja ? `#${r.loja}` : '—';
+    return `<tr${click}>
+      <td class="td-loja">${lojaLabel}</td>
       <td class="td-nome">${r.nome}</td>
       <td class="td-qty">${r.qty.toLocaleString('pt-BR')}</td>
       <td><div class="td-bar-wrap">
@@ -5977,15 +5983,15 @@ function seCombinarPorLoja(vendas, estoques) {
   const map = {};
   (vendas || []).forEach(r => {
     const loja = normCodLoja(String(r.loja || ''));
-    if (!loja) return;
-    if (!map[loja]) map[loja] = { loja, nome: nomeLojaDePara(loja), sellout: 0, estoque: 0, risco: '' };
-    map[loja].sellout += Number(r.qty || 0);
+    const key = loja || '__SEM_FILIAL__';
+    if (!map[key]) map[key] = { loja, nome: nomeLojaDePara(loja), sellout: 0, estoque: 0, risco: '', semFilial: !loja };
+    map[key].sellout += Number(r.qty || 0);
   });
   (estoques || []).forEach(r => {
     const loja = normCodLoja(String(r.loja || ''));
-    if (!loja) return;
-    if (!map[loja]) map[loja] = { loja, nome: nomeLojaDePara(loja), sellout: 0, estoque: 0, risco: '' };
-    map[loja].estoque += Number(r.qty || 0);
+    const key = loja || '__SEM_FILIAL__';
+    if (!map[key]) map[key] = { loja, nome: nomeLojaDePara(loja), sellout: 0, estoque: 0, risco: '', semFilial: !loja };
+    map[key].estoque += Number(r.qty || 0);
   });
   return Object.values(map).map(r => {
     if (r.sellout > 0 && r.estoque <= 0) r.risco = 'Sem estoque';
@@ -6189,7 +6195,9 @@ function seRenderGrafico(byLoja, mensal = false, target = 'filial') {
       maintainAspectRatio: false,
       interaction: { mode: 'index', intersect: false },
       onClick: monthlyByLabel ? null : (evt, elements) => {
-        if (elements.length > 0) setTimeout(() => seFiltrarPorLoja(dadosGrafico[elements[0].index].loja), 0);
+        if (elements.length === 0) return;
+        const loja = dadosGrafico[elements[0].index]?.loja;
+        if (loja) setTimeout(() => seFiltrarPorLoja(loja), 0);
       },
       plugins: {
         legend: {
@@ -6245,9 +6253,11 @@ function seRenderTabela(byLoja, estoqueData = '') {
 
   const linhas = sorted.map(r => {
     const ativo = se_active.dim === 'loja' && se_active.val === r.loja ? ' row-active' : '';
+    const click = r.loja ? ` class="clickable-row${ativo}" onclick="seFiltrarPorLoja('${r.loja}')"` : '';
+    const lojaLabel = r.loja ? `#${r.loja}` : '—';
     return `
-    <tr class="clickable-row${ativo}" onclick="seFiltrarPorLoja('${r.loja}')">
-      <td class="td-loja">#${r.loja}</td>
+    <tr${click}>
+      <td class="td-loja">${lojaLabel}</td>
       <td class="td-nome">${r.nome}</td>
       <td class="td-qty" style="text-align:center">${r.sellout.toLocaleString('pt-BR')}</td>
       <td class="td-qty" style="text-align:center;color:var(--accent2)">${r.estoque.toLocaleString('pt-BR')}</td>
