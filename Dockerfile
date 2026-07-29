@@ -8,6 +8,7 @@ RUN cd backend && npm install --omit=dev
 
 COPY backend ./backend
 COPY frontend ./frontend
+COPY modelo_contagem_estoque_ikesaki.xlsx ./modelo_contagem_estoque_ikesaki.xlsx
 
 ENV NODE_ENV=production
 EXPOSE 3000
