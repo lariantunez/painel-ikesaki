@@ -25,7 +25,7 @@ app.use((req, res, next) => {
 
 app.use(express.static(frontendPath));
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 8000;
 const uri = process.env.MONGODB_URI;
 const dbName = process.env.DB_NAME || "ikesaki_dashboard";
 const READ_ONLY = /^(1|true|yes|sim)$/i.test(process.env.READ_ONLY || "");

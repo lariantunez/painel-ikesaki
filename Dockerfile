@@ -11,6 +11,7 @@ COPY frontend ./frontend
 COPY modelo_contagem_estoque_ikesaki.xlsx ./modelo_contagem_estoque_ikesaki.xlsx
 
 ENV NODE_ENV=production
-EXPOSE 3000
+ENV PORT=8000
+EXPOSE 8000
 
 CMD ["node", "backend/src/server.js"]
