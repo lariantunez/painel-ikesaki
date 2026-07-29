@@ -2113,7 +2113,16 @@ async function arquivoParaCSVImportacao(arquivo, status) {
   const workbook = XLSX.read(buffer, { type: 'array', raw: true });
   const sheetName = workbook.SheetNames[0];
   if (!sheetName) throw new Error('Arquivo sem abas para importar.');
-  return XLSX.utils.sheet_to_csv(workbook.Sheets[sheetName], { FS: ';', RS: '\n', blankrows: false });
+  const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, raw: true, defval: '' });
+  const escapeCsv = value => {
+    let text = String(value ?? '');
+    if (/[;"\r\n]/.test(text)) text = `"${text.replace(/"/g, '""')}"`;
+    return text;
+  };
+  return rows
+    .filter(row => row.some(cell => String(cell ?? '').trim() !== ''))
+    .map(row => row.map(escapeCsv).join(';'))
+    .join('\n');
 }
 
 async function enviarImportacaoProgressiva(inputId, rota, tipoLabel) {
