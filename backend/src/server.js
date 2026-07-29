@@ -54,6 +54,13 @@ app.get("/api/health", (_req, res) => {
   });
 });
 
+app.get("/api/config", (_req, res) => {
+  res.json({
+    readOnly: READ_ONLY,
+    ambiente: READ_ONLY ? "teste" : "producao"
+  });
+});
+
 const WRITE_METHODS = new Set([
   "bulkWrite",
   "createIndex",
@@ -81,6 +88,45 @@ function bloquearEscritaMongo(operacao) {
   const erro = new Error(`Ambiente somente leitura: operacao Mongo bloqueada (${operacao}).`);
   erro.code = "READ_ONLY_MONGO_WRITE_BLOCKED";
   throw erro;
+}
+
+function enviarModeloEstoqueLocalVazio(res, filename) {
+  const modeloLocal = path.join(process.cwd(), "modelo_contagem_estoque_ikesaki.xlsx");
+  if (!fs.existsSync(modeloLocal)) {
+    return res.status(404).json({ erro: "Modelo de estoque local nao encontrado" });
+  }
+
+  const hoje = new Date();
+  const dataPadrao = `${String(hoje.getDate()).padStart(2, "0")}/${String(hoje.getMonth() + 1).padStart(2, "0")}/${hoje.getFullYear()}`;
+  const wbLocal = XLSX.readFile(modeloLocal, { raw: true });
+  const wsLocal = wbLocal.Sheets[wbLocal.SheetNames[0]];
+  const linhas = XLSX.utils.sheet_to_json(wsLocal, { header: 1, defval: "", raw: true })
+    .slice(1)
+    .filter(row => row.some(cell => String(cell ?? "").trim()))
+    .map(row => [
+      dataPadrao,
+      limparTextoExibicao(row[1]),
+      limparTextoExibicao(row[2]),
+      limparTextoExibicao(row[3]),
+      normalizarEAN(row[4]),
+      ""
+    ]);
+
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet([
+    ["Data da Contagem", "Filial", "Categoria", "Nome do Produto", "EAN", "Quantidade em Estoque"],
+    ...linhas
+  ]);
+  ws["!cols"] = [{ wch: 16 }, { wch: 24 }, { wch: 28 }, { wch: 60 }, { wch: 18, numFmt: "@" }, { wch: 22 }];
+  for (let row = 2; row <= linhas.length + 1; row++) {
+    const addr = `E${row}`;
+    if (ws[addr]) { ws[addr].t = "s"; ws[addr].z = "@"; }
+  }
+  XLSX.utils.book_append_sheet(wb, ws, "Contagem");
+  const buffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+  res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+  return res.send(buffer);
 }
 
 function criarDbSomenteLeitura(db) {
@@ -129,6 +175,19 @@ app.use((req, res, next) => {
     });
   }
   next();
+});
+
+app.get("/api/templates/:filename", (req, res, next) => {
+  const filename = path.basename(req.params.filename || "");
+  const modeloEstoque = filename === "modelo_contagem_estoque_ikesaki.xlsx" || filename === "modelo_estoque_manual_ikesaki.xlsx";
+  if (!modeloEstoque || mongoReady) return next();
+
+  try {
+    return enviarModeloEstoqueLocalVazio(res, filename);
+  } catch (error) {
+    console.error("Erro ao gerar modelo local de estoque:", error);
+    return res.status(503).json({ erro: "Modelo de estoque indisponivel", detalhe: error.message });
+  }
 });
 
 // ── CACHE DE RESULTADOS (TTL 60 min) ─────────────────────────────────────────
