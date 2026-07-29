@@ -1242,7 +1242,7 @@ async function iniciarServidor() {
                 if (col === "Data" && doc._data_iso) return isoParaBR(doc._data_iso);
                 return limparTextoExibicao(doc[col] ?? "");
               }))
-            : [TEMPLATES_XLSX[filename].exemplo];
+            : [];
           return enviarXlsx(res, filename, "Dados Brutos", colunas, linhas, ["Ean", "GTIN/PLU"]);
         }
 
