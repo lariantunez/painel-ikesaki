@@ -8,6 +8,7 @@
 <meta http-equiv="Expires" content="0">
 <title>Ikesaki · Dashboard de Vendas</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=Figtree:wght@300;400;500;600&display=swap" rel="stylesheet">
 <script>
@@ -2089,6 +2090,127 @@ function enviarArquivoComProgresso(url, formData, token, onProgress) {
   });
 }
 
+function linhasPorLoteProgressivo(totalLinhas) {
+  const total = Math.max(1, Number(totalLinhas) || 1);
+  return Math.max(1, Math.ceil(total / 100));
+}
+
+function tipoImportacaoPorRota(rota) {
+  if (rota.includes('dados-brutos')) return 'Dados brutos';
+  if (rota.includes('estoque-manual')) return 'Estoque manual';
+  if (rota.includes('categorias-depara')) return 'De/Para categorias';
+  if (rota.includes('lojas-depara')) return 'De/Para lojas';
+  return 'Importacao';
+}
+
+async function arquivoParaCSVImportacao(arquivo, status) {
+  const nome = String(arquivo.name || '').toLowerCase();
+  if (nome.endsWith('.csv')) return arquivo.text();
+  if (!window.XLSX) throw new Error('Biblioteca XLSX nao carregada. Atualize a pagina e tente novamente.');
+  atualizarProgressoImportacao(status, 1, `Lendo ${arquivo.name}...`);
+  const buffer = await arquivo.arrayBuffer();
+  atualizarProgressoImportacao(status, 2, `Convertendo ${arquivo.name}...`);
+  const workbook = XLSX.read(buffer, { type: 'array', raw: true });
+  const sheetName = workbook.SheetNames[0];
+  if (!sheetName) throw new Error('Arquivo sem abas para importar.');
+  return XLSX.utils.sheet_to_csv(workbook.Sheets[sheetName], { FS: ';', RS: '\n', blankrows: false });
+}
+
+async function enviarImportacaoProgressiva(inputId, rota, tipoLabel) {
+  if (bloquearSomenteLeitura('Importacao')) return;
+  const fileInput = document.getElementById(inputId);
+  const status = document.getElementById('import-status');
+  const token = admGetToken();
+
+  if (!fileInput || !fileInput.files.length) {
+    status.textContent = 'Selecione um arquivo CSV, XLS ou XLSX antes de importar.';
+    status.className = 'import-status err';
+    return;
+  }
+  if (!token) {
+    status.textContent = 'Faca login como administrador para importar.';
+    status.className = 'import-status err';
+    return;
+  }
+
+  const arquivo = fileInput.files[0];
+  const tipo = tipoLabel || tipoImportacaoPorRota(rota);
+  const importId = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+
+  try {
+    atualizarProgressoImportacao(status, 1, `Preparando ${arquivo.name}...`);
+    const texto = await arquivoParaCSVImportacao(arquivo, status);
+    const linhas = texto.split(/\r?\n/);
+    const cabecalho = linhas[0];
+    const dados = linhas.slice(1).filter(l => l.trim() !== '');
+    if (!cabecalho || dados.length === 0) throw new Error('Arquivo vazio ou sem dados.');
+
+    const linhasPorLote = linhasPorLoteProgressivo(dados.length);
+    const totalLotes = Math.ceil(dados.length / linhasPorLote);
+    let totalInserido = 0;
+    let retencaoInfo = null;
+
+    for (let i = 0; i < totalLotes; i++) {
+      const fatia = dados.slice(i * linhasPorLote, (i + 1) * linhasPorLote);
+      const csvLote = cabecalho + '\n' + fatia.join('\n');
+      const blob = new Blob([csvLote], { type: 'text/csv;charset=utf-8' });
+      const formData = new FormData();
+      formData.append('file', new File([blob], arquivo.name.replace(/\.(xls|xlsx)$/i, '.csv'), { type: 'text/csv' }));
+      formData.append('originalName', arquivo.name);
+      formData.append('importId', importId);
+      formData.append('chunkIndex', String(i));
+      formData.append('totalChunks', String(totalLotes));
+      formData.append('totalRecords', String(dados.length));
+
+      atualizarProgressoImportacao(status, Math.max(1, Math.min(99, Math.floor((i / totalLotes) * 100))),
+        `${tipo}: salvando lote ${i + 1} de ${totalLotes}`);
+
+      const response = await fetch(`${API_BASE}${rota}`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData,
+      });
+      const textoResp = await response.text();
+      let data;
+      try { data = JSON.parse(textoResp); } catch (_) {
+        throw new Error(`Lote ${i + 1}: servidor retornou resposta invalida (${response.status}).`);
+      }
+      if (response.status === 401) {
+        sessionStorage.removeItem('adm_token');
+        admAtualizarUI();
+        throw new Error('Sessao expirada. Faca login novamente.');
+      }
+      if (!response.ok) throw new Error(`Lote ${i + 1}: ${data.detalhe || data.erro || 'Erro desconhecido'}`);
+      totalInserido += data.inserido || 0;
+      if (data.retencao) retencaoInfo = data.retencao;
+
+      atualizarProgressoImportacao(status, Math.max(1, Math.min(99, Math.floor(((i + 1) / totalLotes) * 100))),
+        `${tipo}: ${totalInserido.toLocaleString('pt-BR')} registros salvos`);
+    }
+
+    atualizarProgressoImportacao(status, 100, 'Importacao concluida.');
+    status.innerHTML = `✓ Importação concluída · <strong>${totalInserido.toLocaleString('pt-BR')}</strong> registros inseridos em ${totalLotes} lote${totalLotes > 1 ? 's' : ''}.`;
+    if (retencaoInfo?.aplicado) {
+      status.innerHTML += ` Retencao aplicada: ${Number(retencaoInfo.registrosRemovidos || 0).toLocaleString('pt-BR')} registros antigos removidos; mantidos ${retencaoInfo.mesesMantidos?.length || 13} meses.`;
+    }
+    status.className = 'import-status ok';
+    limparCacheDashboard();
+    fileInput.value = '';
+    setTimeout(() => recarregarDados(), 900);
+  } catch (error) {
+    console.error(error);
+    if (rota === '/api/importar/dados-brutos') {
+      await fetch(`${API_BASE}/api/importar/dados-brutos/cancelar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ importId })
+      }).catch(() => {});
+    }
+    status.textContent = `Erro ao importar: ${error.message}`;
+    status.className = 'import-status err';
+  }
+}
+
 async function enviarCSV(inputId, rota) {
   if (bloquearSomenteLeitura('Importacao')) return;
   const fileInput = document.getElementById(inputId);
@@ -2206,8 +2328,9 @@ async function enviarDadosBrutos(inputId, rota) {
   }
 
   const nome = fileInput.files[0].name.toLowerCase();
-  if (nome.endsWith('.csv')) return enviarCSV(inputId, rota);
-  if (nome.endsWith('.xls') || nome.endsWith('.xlsx')) return enviarXLSX(inputId, rota);
+  if (nome.endsWith('.csv') || nome.endsWith('.xls') || nome.endsWith('.xlsx')) {
+    return enviarImportacaoProgressiva(inputId, rota, 'Dados brutos');
+  }
 
   status.textContent = 'Formato inválido. Use CSV, XLS ou XLSX.';
   status.className = 'import-status err';
@@ -2234,6 +2357,8 @@ async function enviarXLSX(inputId, rota) {
     status.className = 'import-status err';
     return;
   }
+
+  return enviarImportacaoProgressiva(inputId, rota, tipoImportacaoPorRota(rota));
 
   const arquivo  = fileInput.files[0];
   const kb       = Math.round(arquivo.size / 1024);

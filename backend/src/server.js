@@ -2636,6 +2636,24 @@ async function iniciarServidor() {
           });
           if (opcoes.extraCampos) Object.assign(registro, opcoes.extraCampos);
 
+          if (colecao.collectionName === 'categorias_depara') {
+            const chaves = [
+              registro.CODBARRAS,
+              registro.GTIN_IKESAKI,
+              registro.CODBARRAS_KERT,
+              registro.EAN
+            ].map(normalizarEAN).filter(Boolean);
+            registro.CODBARRAS_LOOKUP = [...new Set(chaves)];
+            registro.CODBARRAS = registro.CODBARRAS_LOOKUP[0] || null;
+            registro.CATEGORIA = limparTextoExibicao(registro.CATEGORIA ?? registro.CATEGORIA_KERT);
+            registro.FAMILIA = limparTextoExibicao(registro.FAMILIA ?? registro.FAMILIA_KERT);
+            registro["NOME PRODUTO"] = limparTextoExibicao(registro["NOME PRODUTO"] ?? registro["NOME PRODUTO_KERT"] ?? registro.PRODUTO_IKESAKI);
+          }
+          if (colecao.collectionName === 'lojas_depara') {
+            registro.Cod_Loja = limparTextoExibicao(registro.Cod_Loja ?? registro.LOJA);
+            registro.Nome_Fantasia = limparTextoExibicao(registro.Nome_Fantasia ?? registro["NOME FANTASIA"] ?? registro.NOME_FANTASIA);
+          }
+
           // Pré-computa campos numéricos, _gtin e _data_iso para queries indexadas
           if (colecao.collectionName === 'dados_brutos') {
             const qtdRaw = registro['Venda (Qtd)'] ?? registro['Venda Nf Quantidade'] ?? registro['Venda Pdv Quantidade'] ?? 0;
@@ -2791,7 +2809,7 @@ async function iniciarServidor() {
       };
     }
 
-    async function processarEstoqueManual(req, importId) {
+    async function processarEstoqueManual(req, importId, opcoes = {}) {
       const categoriasPorGtin = await carregarCategoriasPorGtin();
       const ext = path.extname(req.file.originalname || req.file.filename).toLowerCase();
       let linhas = [];
@@ -2824,10 +2842,10 @@ async function iniciarServidor() {
       if (!registros.length) {
         throw new Error("Nenhuma linha valida encontrada. Verifique Data da Contagem, Filial, EAN e Quantidade em Estoque.");
       }
-      if (totalEstoque <= 0) {
+      if (opcoes.validarTotalEstoque !== false && totalEstoque <= 0) {
         throw new Error("A contagem importada esta totalmente zerada. Preencha a coluna Quantidade em Estoque antes de importar.");
       }
-      await db.collection("estoque_manual").deleteMany({});
+      if (opcoes.deleteFirst !== false) await db.collection("estoque_manual").deleteMany({});
       if (registros.length) await db.collection("estoque_manual").insertMany(registros, { ordered: false });
       return registros.length;
     }
@@ -2884,9 +2902,9 @@ async function iniciarServidor() {
       const chunkIndex   = parseInt(req.body.chunkIndex   ?? "0",  10);
       const totalChunks  = parseInt(req.body.totalChunks  ?? "1",  10);
       const totalRecords = parseInt(req.body.totalRecords ?? "0",  10);
-      const nomeArquivo  = req.file.originalname || req.file.filename;
+      const nomeArquivo  = req.body.originalName || req.file.originalname || req.file.filename;
       const substituir   = req.body.substituir === 'true';
-      const extArquivo   = path.extname(nomeArquivo).toLowerCase();
+      const extArquivo   = path.extname(req.file.originalname || req.file.filename).toLowerCase();
 
       try {
         let retencao = null;
@@ -2903,7 +2921,7 @@ async function iniciarServidor() {
           ? await processarXLSX(req, db.collection("dados_brutos"), opcoesImportacao)
           : await processarChunkCSV(req, db.collection("dados_brutos"), false, opcoesImportacao);
 
-        const isUltimo = extArquivo === '.xls' || extArquivo === '.xlsx' || chunkIndex === totalChunks - 1;
+        const isUltimo = chunkIndex === totalChunks - 1;
         if (isUltimo) {
           await db.collection("logs_importacao").insertOne({
             importId, tipo: "dados_brutos", arquivo: nomeArquivo,
@@ -2951,21 +2969,30 @@ async function iniciarServidor() {
     app.post("/api/importar/categorias-depara", verificarToken, upload.single("file"), async (req, res) => {
       if (!req.file) return res.status(400).json({ erro: "Nenhum arquivo enviado." });
       const importId    = req.body.importId || crypto.randomBytes(8).toString("hex");
-      const nomeArquivo = req.file.originalname || req.file.filename;
+      const chunkIndex  = parseInt(req.body.chunkIndex ?? "0", 10);
+      const totalChunks = parseInt(req.body.totalChunks ?? "1", 10);
+      const nomeArquivo = req.body.originalName || req.file.originalname || req.file.filename;
+      const extArquivo  = path.extname(req.file.originalname || req.file.filename).toLowerCase();
       try {
-        const inserido = await processarXLSX(req, db.collection("categorias_depara"), {
-          deleteFirst: true,
+        const opcoes = {
+          deleteFirst: chunkIndex === 0,
           extraCampos: { _import_id: importId }
-        });
-        await db.collection("logs_importacao").insertOne({
-          importId, tipo: "categorias_depara", arquivo: nomeArquivo,
-          usuario: req.usuarioLogado, total: inserido, data: new Date()
-        });
-        cacheClear();
-        _migCat = false; _catCountCache = -1;
-        await recomputarCategoriasDadosBrutos({});
-        _migCat = true;
-        res.json({ ok: true, inserido, ultimo: true, mensagem: "Categorias importadas" });
+        };
+        const inserido = extArquivo === ".csv"
+          ? await processarChunkCSV(req, db.collection("categorias_depara"), true, opcoes)
+          : await processarXLSX(req, db.collection("categorias_depara"), opcoes);
+        const isUltimo = chunkIndex === totalChunks - 1;
+        if (isUltimo) {
+          await db.collection("logs_importacao").insertOne({
+            importId, tipo: "categorias_depara", arquivo: nomeArquivo,
+            usuario: req.usuarioLogado, total: parseInt(req.body.totalRecords || inserido, 10), data: new Date()
+          });
+          cacheClear();
+          _migCat = false; _catCountCache = -1;
+          await recomputarCategoriasDadosBrutos({});
+          _migCat = true;
+        }
+        res.json({ ok: true, inserido, ultimo: isUltimo, mensagem: isUltimo ? "Categorias importadas" : "Lote salvo" });
       } catch (error) {
         res.status(500).json({ erro: "Erro ao salvar no banco de dados", detalhe: error.message });
       }
@@ -2974,18 +3001,27 @@ async function iniciarServidor() {
     app.post("/api/importar/lojas-depara", verificarToken, upload.single("file"), async (req, res) => {
       if (!req.file) return res.status(400).json({ erro: "Nenhum arquivo enviado." });
       const importId    = req.body.importId || crypto.randomBytes(8).toString("hex");
-      const nomeArquivo = req.file.originalname || req.file.filename;
+      const chunkIndex  = parseInt(req.body.chunkIndex ?? "0", 10);
+      const totalChunks = parseInt(req.body.totalChunks ?? "1", 10);
+      const nomeArquivo = req.body.originalName || req.file.originalname || req.file.filename;
+      const extArquivo  = path.extname(req.file.originalname || req.file.filename).toLowerCase();
       try {
-        const inserido = await processarXLSX(req, db.collection("lojas_depara"), {
-          deleteFirst: true,
+        const opcoes = {
+          deleteFirst: chunkIndex === 0,
           extraCampos: { _import_id: importId }
-        });
-        await db.collection("logs_importacao").insertOne({
-          importId, tipo: "lojas_depara", arquivo: nomeArquivo,
-          usuario: req.usuarioLogado, total: inserido, data: new Date()
-        });
-        cacheClear();
-        res.json({ ok: true, inserido, ultimo: true, mensagem: "Lojas importadas" });
+        };
+        const inserido = extArquivo === ".csv"
+          ? await processarChunkCSV(req, db.collection("lojas_depara"), true, opcoes)
+          : await processarXLSX(req, db.collection("lojas_depara"), opcoes);
+        const isUltimo = chunkIndex === totalChunks - 1;
+        if (isUltimo) {
+          await db.collection("logs_importacao").insertOne({
+            importId, tipo: "lojas_depara", arquivo: nomeArquivo,
+            usuario: req.usuarioLogado, total: parseInt(req.body.totalRecords || inserido, 10), data: new Date()
+          });
+          cacheClear();
+        }
+        res.json({ ok: true, inserido, ultimo: isUltimo, mensagem: isUltimo ? "Lojas importadas" : "Lote salvo" });
       } catch (error) {
         res.status(500).json({ erro: "Erro ao salvar no banco de dados", detalhe: error.message });
       }
@@ -2994,16 +3030,24 @@ async function iniciarServidor() {
     app.post("/api/importar/estoque-manual", verificarToken, upload.single("file"), async (req, res) => {
       if (!req.file) return res.status(400).json({ erro: "Nenhum arquivo enviado." });
       const importId = req.body.importId || crypto.randomBytes(8).toString("hex");
-      const nomeArquivo = req.file.originalname || req.file.filename;
+      const chunkIndex  = parseInt(req.body.chunkIndex ?? "0", 10);
+      const totalChunks = parseInt(req.body.totalChunks ?? "1", 10);
+      const nomeArquivo = req.body.originalName || req.file.originalname || req.file.filename;
       try {
-        const inserido = await processarEstoqueManual(req, importId);
-        await db.collection("logs_importacao").deleteMany({ tipo: "estoque_manual" });
-        await db.collection("logs_importacao").insertOne({
-          importId, tipo: "estoque_manual", arquivo: nomeArquivo,
-          usuario: req.usuarioLogado, total: inserido, data: new Date()
+        const inserido = await processarEstoqueManual(req, importId, {
+          deleteFirst: chunkIndex === 0,
+          validarTotalEstoque: totalChunks === 1
         });
-        cacheClear();
-        res.json({ ok: true, inserido, ultimo: true, mensagem: "Estoque manual importado" });
+        const isUltimo = chunkIndex === totalChunks - 1;
+        if (isUltimo) {
+          await db.collection("logs_importacao").deleteMany({ tipo: "estoque_manual" });
+          await db.collection("logs_importacao").insertOne({
+            importId, tipo: "estoque_manual", arquivo: nomeArquivo,
+            usuario: req.usuarioLogado, total: parseInt(req.body.totalRecords || inserido, 10), data: new Date()
+          });
+          cacheClear();
+        }
+        res.json({ ok: true, inserido, ultimo: isUltimo, mensagem: isUltimo ? "Estoque manual importado" : "Lote salvo" });
       } catch (error) {
         try { if (req.file?.path) fs.unlinkSync(req.file.path); } catch (_) {}
         res.status(400).json({ erro: error.message || "Erro ao salvar estoque manual", detalhe: error.message });
