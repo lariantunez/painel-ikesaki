@@ -131,8 +131,14 @@ function enviarModeloEstoqueLocalVazio(res, filename) {
 
 function colunasDocumentoOriginal(doc = {}) {
   const chaves = Object.keys(doc).filter(col => !String(col).startsWith("_") && !["_id", "importado_em"].includes(col));
+  return filtrarColunasDadosBrutosModelo(chaves, doc);
+}
+
+function filtrarColunasDadosBrutosModelo(colunas = [], doc = {}) {
+  const chaves = [...colunas];
   const tem = campo => chaves.includes(campo);
   const derivados = new Set();
+  ["Ano", "Mês", "MÃªs", "MÃƒÂªs", "Mes", "Produto"].forEach(col => derivados.add(col));
   if (tem("Filial")) derivados.add("Loja");
   if (tem("Ean")) derivados.add("GTIN/PLU");
   if (tem("Faturamento (Unid)")) derivados.add("Venda (Qtd)");
@@ -1185,8 +1191,8 @@ async function iniciarServidor() {
         exemplo:  ["001", "Loja Centro"]
       },
       "modelo_dados_brutos_ikesaki.xlsx": {
-        colunas: ["Data", "Mês Referência", "Filial", "Fornecedor", "Marca", "Codigo", "Descricao", "Ean", "Faturamento (Unid)", "Faturamento (R$)"],
-        exemplo:  ["01/01/2026", "", "116 - Praia Mar", "KERT", "KERATON", "27958", "LEAVE IN KERATON 200ML USO ESSENCIAL", "7896380660612", 7, 230.30]
+        colunas: ["Data", "Filial", "Fornecedor", "Marca", "Codigo", "Descricao", "Ean", "Faturamento (Unid)", "Faturamento (R$)"],
+        exemplo:  ["01/01/2026", "116 - Praia Mar", "KERT", "KERATON", "27958", "LEAVE IN KERATON 200ML USO ESSENCIAL", "7896380660612", 7, 230.30]
       },
       "modelo_estoque_manual_ikesaki.xlsx": {
         colunas: ["Data da Contagem", "Filial", "Categoria", "Nome do Produto", "EAN", "Quantidade em Estoque"],
@@ -1250,7 +1256,7 @@ async function iniciarServidor() {
             .toArray();
           const colunas = docs.length
             ? (Array.isArray(ultimoLog?.colunasOriginais) && ultimoLog.colunasOriginais.length
-                ? ultimoLog.colunasOriginais
+                ? filtrarColunasDadosBrutosModelo(ultimoLog.colunasOriginais, docs[0])
                 : colunasDocumentoOriginal(docs[0]))
             : TEMPLATES_XLSX[filename].colunas;
           const linhas = docs.length
