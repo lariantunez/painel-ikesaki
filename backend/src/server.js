@@ -1434,6 +1434,16 @@ async function iniciarServidor() {
         res.setHeader("Content-Disposition", `attachment; filename="${template.filename}"`);
         res.send("﻿" + template.conteudo);
       } catch (error) {
+        const filename = path.basename(req.params.filename || "");
+        const modeloEstoque = filename === "modelo_contagem_estoque_ikesaki.xlsx" || filename === "modelo_estoque_manual_ikesaki.xlsx";
+        if (modeloEstoque && !res.headersSent) {
+          try {
+            console.warn("Fallback local para modelo de estoque apos erro:", error.message);
+            return enviarModeloEstoqueLocalVazio(res, filename);
+          } catch (fallbackError) {
+            console.error("Erro no fallback local do modelo de estoque:", fallbackError);
+          }
+        }
         res.status(500).json({ erro: "Erro ao buscar template.", detalhe: error.message });
       }
     });
