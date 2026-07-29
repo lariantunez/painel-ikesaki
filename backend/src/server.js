@@ -1254,10 +1254,16 @@ async function iniciarServidor() {
             .sort({ data: -1 })
             .limit(1)
             .next();
+          if (!logEstoque) {
+            return enviarModeloEstoqueLocalVazio(res, filename);
+          }
           const [ultimoEstoque] = await db.collection("estoque_manual").aggregate([
             { $group: { _id: null, data: { $max: "$_data_iso" } } }
           ]).toArray();
-          const ultimaDataEstoque = logEstoque ? (ultimoEstoque?.data || null) : null;
+          if (!ultimoEstoque?.data) {
+            return enviarModeloEstoqueLocalVazio(res, filename);
+          }
+          const ultimaDataEstoque = ultimoEstoque.data;
           const estoqueAtualRows = ultimaDataEstoque
             ? await db.collection("estoque_manual").aggregate([
                 { $match: { _data_iso: ultimaDataEstoque } },
