@@ -4,6 +4,7 @@ uploads/
 backend/uploads/
 *.csv
 *.xlsx
+!modelo_contagem_estoque_ikesaki.xlsx
 *.jpg
 *.JPG
 *.png

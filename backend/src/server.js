@@ -998,7 +998,7 @@ async function iniciarServidor() {
         nome:     "Dados Brutos Ikesaki"
       },
       {
-        filename: "modelo_estoque_manual_ikesaki.xlsx",
+        filename: "modelo_contagem_estoque_ikesaki.xlsx",
         nome:     "Estoque Manual Ikesaki"
       },
       {
@@ -1122,7 +1122,7 @@ async function iniciarServidor() {
 
     const TEMPLATES_DINAMICOS = [
       { filename: "modelo_dados_brutos_ikesaki.xlsx", nome: "Dados Brutos Ikesaki", tipo: "dados_brutos" },
-      { filename: "modelo_estoque_manual_ikesaki.xlsx", nome: "Estoque Manual Ikesaki", tipo: "estoque_manual" },
+      { filename: "modelo_contagem_estoque_ikesaki.xlsx", nome: "Estoque Manual Ikesaki", tipo: "estoque_manual" },
       { filename: "modelo_categorias_depara.xlsx", nome: "De/Para Categorias", tipo: "categorias_depara" },
       { filename: "modelo_lojas_depara.csv", nome: "De/Para Lojas", tipo: "lojas_depara" }
     ];
@@ -1187,7 +1187,7 @@ async function iniciarServidor() {
           return enviarXlsx(res, filename, "Dados Brutos", colunas, linhas, ["Ean", "GTIN/PLU"]);
         }
 
-        if (filename === "modelo_estoque_manual_ikesaki.xlsx") {
+        if (filename === "modelo_estoque_manual_ikesaki.xlsx" || filename === "modelo_contagem_estoque_ikesaki.xlsx") {
           const hoje = new Date();
           const dataPadrao = `${String(hoje.getDate()).padStart(2, "0")}/${String(hoje.getMonth() + 1).padStart(2, "0")}/${hoje.getFullYear()}`;
           const logEstoque = await db.collection("logs_importacao")
@@ -1216,7 +1216,7 @@ async function iniciarServidor() {
             .sort({ CATEGORIA: 1, "NOME PRODUTO": 1, Produto: 1 })
             .toArray();
 
-          const linhas = categorias.length
+          let linhas = categorias.length
             ? (lojas.length ? lojas : [{ Cod_Loja: "GERAL", Nome_Fantasia: "FILIAL GERAL" }]).flatMap(loja => categorias.map(c => {
                 const gtin = normalizarEAN(c.CODBARRAS);
                 const filial = limparTextoExibicao(loja.Cod_Loja);
@@ -1231,6 +1231,25 @@ async function iniciarServidor() {
                 ];
               }))
             : [[dataModelo, "GERAL", "IMPORTE O DE/PARA CATEGORIAS", "Produto Exemplo", "7891234567890", ""]];
+
+          if (!categorias.length) {
+            const modeloLocal = path.join(process.cwd(), "modelo_contagem_estoque_ikesaki.xlsx");
+            if (fs.existsSync(modeloLocal)) {
+              const wbLocal = XLSX.readFile(modeloLocal, { raw: true });
+              const wsLocal = wbLocal.Sheets[wbLocal.SheetNames[0]];
+              linhas = XLSX.utils.sheet_to_json(wsLocal, { header: 1, defval: "", raw: true })
+                .slice(1)
+                .filter(row => row.some(cell => String(cell ?? "").trim()))
+                .map(row => [
+                  dataModelo,
+                  limparTextoExibicao(row[1]),
+                  limparTextoExibicao(row[2]),
+                  limparTextoExibicao(row[3]),
+                  normalizarEAN(row[4]),
+                  ""
+                ]);
+            }
+          }
 
           const wb = XLSX.utils.book_new();
           const ws = XLSX.utils.aoa_to_sheet([
