@@ -1190,10 +1190,15 @@ async function iniciarServidor() {
         if (filename === "modelo_estoque_manual_ikesaki.xlsx") {
           const hoje = new Date();
           const dataPadrao = `${String(hoje.getDate()).padStart(2, "0")}/${String(hoje.getMonth() + 1).padStart(2, "0")}/${hoje.getFullYear()}`;
+          const logEstoque = await db.collection("logs_importacao")
+            .find({ tipo: "estoque_manual" })
+            .sort({ data: -1 })
+            .limit(1)
+            .next();
           const [ultimoEstoque] = await db.collection("estoque_manual").aggregate([
             { $group: { _id: null, data: { $max: "$_data_iso" } } }
           ]).toArray();
-          const ultimaDataEstoque = ultimoEstoque?.data || null;
+          const ultimaDataEstoque = logEstoque ? (ultimoEstoque?.data || null) : null;
           const estoqueAtualRows = ultimaDataEstoque
             ? await db.collection("estoque_manual").aggregate([
                 { $match: { _data_iso: ultimaDataEstoque } },
