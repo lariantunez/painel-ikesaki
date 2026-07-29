@@ -129,6 +129,21 @@ function enviarModeloEstoqueLocalVazio(res, filename) {
   return res.send(buffer);
 }
 
+function colunasDocumentoOriginal(doc = {}) {
+  const chaves = Object.keys(doc).filter(col => !String(col).startsWith("_") && !["_id", "importado_em"].includes(col));
+  const tem = campo => chaves.includes(campo);
+  const derivados = new Set();
+  if (tem("Filial")) derivados.add("Loja");
+  if (tem("Ean")) derivados.add("GTIN/PLU");
+  if (tem("Faturamento (Unid)")) derivados.add("Venda (Qtd)");
+  if (tem("Faturamento (R$)")) derivados.add("Venda (R$)");
+  if (tem("Mês Referência")) {
+    derivados.add("Mês");
+    derivados.add("Mes");
+  }
+  return chaves.filter(col => !derivados.has(col));
+}
+
 function criarDbSomenteLeitura(db) {
   return new Proxy(db, {
     get(target, prop) {
@@ -1231,17 +1246,15 @@ async function iniciarServidor() {
           const filtro = ultimoLog?.importId ? { _import_id: ultimoLog.importId } : {};
           const docs = await db.collection("dados_brutos")
             .find(filtro)
-            .sort({ _data_iso: 1, Loja: 1, Descricao: 1 })
+            .sort({ _id: 1 })
             .toArray();
-          const colunasPreferidas = TEMPLATES_XLSX[filename].colunas;
-          const colunasExtras = [...new Set(docs.flatMap(doc => Object.keys(doc)))]
-            .filter(col => !col.startsWith("_") && !["_id", "importado_em"].includes(col) && !colunasPreferidas.includes(col));
-          const colunas = [...colunasPreferidas, ...colunasExtras];
+          const colunas = docs.length
+            ? (Array.isArray(ultimoLog?.colunasOriginais) && ultimoLog.colunasOriginais.length
+                ? ultimoLog.colunasOriginais
+                : colunasDocumentoOriginal(docs[0]))
+            : TEMPLATES_XLSX[filename].colunas;
           const linhas = docs.length
-            ? docs.map(doc => colunas.map(col => {
-                if (col === "Data" && doc._data_iso) return isoParaBR(doc._data_iso);
-                return limparTextoExibicao(doc[col] ?? "");
-              }))
+            ? docs.map(doc => colunas.map(col => limparTextoExibicao(doc[col] ?? "")))
             : [];
           return enviarXlsx(res, filename, "Dados Brutos", colunas, linhas, ["Ean", "GTIN/PLU"]);
         }
@@ -2781,6 +2794,11 @@ async function iniciarServidor() {
       return new Promise((resolve, reject) => {
         const resultados = [];
         const stream = fs.createReadStream(req.file.path).pipe(csv({ separator: ";" }));
+        let colunasOriginais = [];
+
+        stream.on("headers", (headers) => {
+          colunasOriginais = headers.map(h => limparColunas ? String(h).trim() : limparValor(h)).filter(Boolean);
+        });
 
         stream.on("data", (linha) => {
           const registro = {};
@@ -2861,7 +2879,7 @@ async function iniciarServidor() {
               await colecao.insertMany(resultados, { ordered: false });
             }
             try { fs.unlinkSync(req.file.path); } catch (_) {}
-            resolve(resultados.length);
+            resolve(opcoes.retornarMeta ? { inserido: resultados.length, colunasOriginais } : resultados.length);
           } catch (err) {
             try { fs.unlinkSync(req.file.path); } catch (_) {}
             reject(err);
@@ -2885,7 +2903,10 @@ async function iniciarServidor() {
       try { fs.unlinkSync(req.file.path); } catch (_) {}
 
       const sheetName = workbook.SheetNames[0];
-      const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { raw: true, defval: '' });
+      const sheet = workbook.Sheets[sheetName];
+      const headerRows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: '' });
+      const colunasOriginais = (headerRows[0] || []).map(c => String(c ?? "").trim()).filter(Boolean);
+      const rows = XLSX.utils.sheet_to_json(sheet, { raw: true, defval: '' });
 
       const resultados = rows.map(linha => {
         const registro = {};
@@ -2924,7 +2945,7 @@ async function iniciarServidor() {
 
       if (opcoes.deleteFirst) await colecao.deleteMany({});
       if (resultados.length > 0) await colecao.insertMany(resultados, { ordered: false });
-      return resultados.length;
+      return opcoes.retornarMeta ? { inserido: resultados.length, colunasOriginais } : resultados.length;
     }
 
     async function carregarCategoriasPorGtin() {
@@ -3074,16 +3095,19 @@ async function iniciarServidor() {
           _migNumericos = false; _migGtin = false; _migData = false; _migCat = false; _catCountCache = -1;
         }
 
-        const opcoesImportacao = { extraCampos: { importado_em: new Date(), _import_id: importId } };
-        const inserido = extArquivo === '.xls' || extArquivo === '.xlsx'
+        const opcoesImportacao = { extraCampos: { importado_em: new Date(), _import_id: importId }, retornarMeta: true };
+        const resultadoImportacao = extArquivo === '.xls' || extArquivo === '.xlsx'
           ? await processarXLSX(req, db.collection("dados_brutos"), opcoesImportacao)
           : await processarChunkCSV(req, db.collection("dados_brutos"), false, opcoesImportacao);
+        const inserido = resultadoImportacao?.inserido ?? resultadoImportacao;
+        const colunasOriginais = resultadoImportacao?.colunasOriginais || [];
 
         const isUltimo = chunkIndex === totalChunks - 1;
         if (isUltimo) {
           await db.collection("logs_importacao").insertOne({
             importId, tipo: "dados_brutos", arquivo: nomeArquivo,
-            usuario: req.usuarioLogado, total: totalRecords || inserido, data: new Date()
+            usuario: req.usuarioLogado, total: totalRecords || inserido, data: new Date(),
+            colunasOriginais
           });
           retencao = await aplicarRetencaoDadosBrutos(13);
           cacheClear();
