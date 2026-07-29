@@ -556,7 +556,7 @@
       <div class="import-row">
         <div class="import-label">Dados Brutos</div>
         <input class="import-file" type="file" id="csvDadosBrutos" accept=".csv,.xls,.xlsx,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
-        <a class="btn-modelo" href="/api/templates/modelo_dados_brutos_ikesaki.xlsx" download="modelo_dados_brutos_ikesaki.xlsx">
+        <a class="btn-modelo" href="/api/templates/modelo_dados_brutos_ikesaki.xlsx" download="modelo_dados_brutos_ikesaki.xlsx" onclick="baixarTemplate(event, this, 'modelo_dados_brutos_ikesaki.xlsx')">
           <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           Modelo
         </a>
@@ -565,7 +565,7 @@
       <div class="import-row">
         <div class="import-label">Estoque Manual</div>
         <input class="import-file" type="file" id="xlsxEstoqueManual" accept=".csv,.xls,.xlsx,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
-        <a class="btn-modelo" href="/api/templates/modelo_estoque_manual_ikesaki.xlsx" download="modelo_estoque_manual_ikesaki.xlsx">
+        <a class="btn-modelo" href="/api/templates/modelo_estoque_manual_ikesaki.xlsx" download="modelo_estoque_manual_ikesaki.xlsx" onclick="baixarTemplate(event, this, 'modelo_estoque_manual_ikesaki.xlsx')">
           <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           Modelo
         </a>
@@ -575,7 +575,7 @@
       <div class="import-row">
         <div class="import-label">De/Para Categorias</div>
         <input class="import-file" type="file" id="xlsxCategorias" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
-        <a class="btn-modelo" href="/api/templates/modelo_categorias_depara.xlsx" download="modelo_categorias_depara.xlsx">
+        <a class="btn-modelo" href="/api/templates/modelo_categorias_depara.xlsx" download="modelo_categorias_depara.xlsx" onclick="baixarTemplate(event, this, 'modelo_categorias_depara.xlsx')">
           <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           Modelo
         </a>
@@ -584,7 +584,7 @@
       <div class="import-row">
         <div class="import-label">De/Para Lojas</div>
         <input class="import-file" type="file" id="xlsxLojas" accept=".csv,text/csv" />
-        <a class="btn-modelo" href="/api/templates/modelo_lojas_depara.csv" download="modelo_lojas_depara.csv">
+        <a class="btn-modelo" href="/api/templates/modelo_lojas_depara.csv" download="modelo_lojas_depara.csv" onclick="baixarTemplate(event, this, 'modelo_lojas_depara.csv')">
           <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           Modelo
         </a>
@@ -2061,6 +2061,44 @@ function atualizarProgressoImportacao(status, pct, msg) {
       </div>
     </div>`;
   status.className = 'import-status';
+}
+
+const templatesBaixando = new Set();
+async function baixarTemplate(event, el, filename) {
+  if (event) event.preventDefault();
+  if (!filename || templatesBaixando.has(filename)) return false;
+
+  templatesBaixando.add(filename);
+  const textoOriginal = el?.innerHTML;
+  if (el) {
+    el.style.pointerEvents = 'none';
+    el.style.opacity = '0.65';
+    el.innerHTML = 'Preparando...';
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/api/templates/${encodeURIComponent(filename)}`);
+    if (!res.ok) throw new Error('Erro ao baixar modelo.');
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch (err) {
+    alert(err.message || 'Erro ao baixar modelo.');
+  } finally {
+    templatesBaixando.delete(filename);
+    if (el) {
+      el.style.pointerEvents = '';
+      el.style.opacity = '';
+      el.innerHTML = textoOriginal;
+    }
+  }
+  return false;
 }
 
 function enviarArquivoComProgresso(url, formData, token, onProgress) {
@@ -7700,7 +7738,7 @@ async function guCarregarModelos() {
           <td class="td-date">${atualizado}</td>
           <td>
             <div class="td-actions">
-              <a class="btn-gu senha" href="/api/templates/${escHtml(t.filename)}" download="${escHtml(t.filename)}" style="text-decoration:none">↓ Baixar</a>
+              <a class="btn-gu senha" href="/api/templates/${escHtml(t.filename)}" download="${escHtml(t.filename)}" onclick="baixarTemplate(event, this, '${escHtml(t.filename)}')" style="text-decoration:none">↓ Baixar</a>
               <label class="btn-gu novo" style="cursor:pointer;margin:0">
                 ↑ Subir Novo
                 <input type="file" accept="${t.filename.endsWith('.xlsx') ? '.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : '.csv,text/csv'}" style="display:none"

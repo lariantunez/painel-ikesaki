@@ -1142,6 +1142,10 @@ async function iniciarServidor() {
       });
       XLSX.utils.book_append_sheet(wb, ws, sheetName);
       const buffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+      cacheSet(`template:${filename}`, {
+        contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        buffer
+      });
       res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
       res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
       return res.send(buffer);
@@ -1151,6 +1155,12 @@ async function iniciarServidor() {
     app.get("/api/templates/:filename", async (req, res) => {
       try {
         const { filename } = req.params;
+        const cachedTemplate = cacheGet(`template:${filename}`);
+        if (cachedTemplate?.buffer) {
+          res.setHeader("Content-Type", cachedTemplate.contentType);
+          res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+          return res.send(cachedTemplate.buffer);
+        }
 
         // Se há binário customizado salvo pelo usuário, serve ele com prioridade
         if (filename === "modelo_dados_brutos_ikesaki.xlsx") {
@@ -1298,9 +1308,11 @@ async function iniciarServidor() {
           const linhas = atuais.length
             ? atuais.map(r => `${limparTextoExibicao(r.Cod_Loja)};${limparTextoExibicao(r.Nome_Fantasia)}`)
             : ["001;Loja Centro"];
+          const conteudo = "\uFEFF" + ["Cod_Loja;Nome_Fantasia", ...linhas].join("\n") + "\n";
+          cacheSet(`template:${filename}`, { contentType: "text/csv; charset=utf-8", buffer: Buffer.from(conteudo, "utf8") });
           res.setHeader("Content-Type", "text/csv; charset=utf-8");
           res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-          return res.send("\uFEFF" + ["Cod_Loja;Nome_Fantasia", ...linhas].join("\n") + "\n");
+          return res.send(conteudo);
         }
 
         // Gera XLSX on-the-fly para os De/Para (preserva GTINs como texto)
