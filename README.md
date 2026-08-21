@@ -1,5 +1,7 @@
 # Painel Ikesaki - Dashboard MongoDB
 
+[Abrir demo estatica do painel](https://lariantunez.github.io/painel-ikesaki/)
+
 Dashboard web desenvolvido para automatizar analises comerciais do cliente Ikesaki, transformando consultas antes feitas manualmente em planilhas dinamicas em um painel com importacao, tratamento e indicadores executivos.
 
 O projeto contempla vendas, valor, estoque e rotinas especificas de contagem manual de estoque, com filtros e agregacoes preparadas para uso pela diretoria comercial.
@@ -70,7 +72,7 @@ npm start
 
 ## Demo estatica
 
-Este repositorio tambem possui uma demo visual em `docs/index.html`, criada para GitHub Pages e portfolio. Ela usa dados ficticios embutidos no proprio HTML, sem depender de MongoDB, backend ou variaveis de ambiente.
+Este repositorio tambem possui uma demo do painel real em `docs/index.html`, criada para GitHub Pages e portfolio. Ela usa dados ficticios e uma API simulada no navegador, sem depender de MongoDB, backend ou variaveis de ambiente.
 
 ## Cuidados de portfolio
 
