@@ -4,179 +4,238 @@
   const isIkesaki = repo.includes("ikesaki");
   const nomePainel = isGeo ? "Geo" : isIkesaki ? "Ikesaki" : "Soneda";
   const dbName = isGeo ? "geo_dashboard_demo" : isIkesaki ? "ikesaki_dashboard_demo" : "soneda_dashboard_demo";
+  const fator = isGeo ? 0.78 : isIkesaki ? 0.92 : 1;
 
   const lojas = [
     { Cod_Loja: "1", Nome_Fantasia: "Centro" },
     { Cod_Loja: "2", Nome_Fantasia: "Shopping Norte" },
     { Cod_Loja: "3", Nome_Fantasia: "Shopping Sul" },
     { Cod_Loja: "4", Nome_Fantasia: "Outlet" },
-    { Cod_Loja: "5", Nome_Fantasia: "E-commerce" }
+    { Cod_Loja: "5", Nome_Fantasia: "E-commerce" },
+    { Cod_Loja: "6", Nome_Fantasia: "Shopping Leste" }
   ];
 
   const categorias = [
-    { CODBARRAS: "7891000000011", PRODUTO: "Shampoo Hidratante", CATEGORIA: "Cabelos", FAMILIA: "Tratamento Capilar" },
+    { CODBARRAS: "7891000000011", PRODUTO: "Shampoo Hidratante", CATEGORIA: isGeo ? "Cabelo" : "Cabelos", FAMILIA: "Tratamento Capilar" },
     { CODBARRAS: "7891000000028", PRODUTO: "Mascara Nutritiva", CATEGORIA: "Tratamento", FAMILIA: "Tratamento Capilar" },
-    { CODBARRAS: "7891000000035", PRODUTO: "Coloracao 6.0", CATEGORIA: "Coloracao", FAMILIA: "Coloracao" },
-    { CODBARRAS: "7891000000042", PRODUTO: "Finalizador Termico", CATEGORIA: "Finalizadores", FAMILIA: "Finalizacao" },
-    { CODBARRAS: "7891000000059", PRODUTO: "Kit Manutencao", CATEGORIA: isIkesaki ? "Unhas" : "Acessorios", FAMILIA: isIkesaki ? "Manicure" : "Acessorios" }
+    { CODBARRAS: "7891000000035", PRODUTO: isGeo ? "Sabonete Liquido" : "Coloracao 6.0", CATEGORIA: isGeo ? "Higiene" : "Coloracao", FAMILIA: isGeo ? "Higiene Pessoal" : "Coloracao" },
+    { CODBARRAS: "7891000000042", PRODUTO: "Finalizador Termico", CATEGORIA: isGeo ? "Perfumaria" : "Finalizadores", FAMILIA: isGeo ? "Perfumaria" : "Finalizacao" },
+    { CODBARRAS: "7891000000059", PRODUTO: isIkesaki ? "Esmalte Gel" : "Kit Manutencao", CATEGORIA: isIkesaki ? "Unhas" : "Acessorios", FAMILIA: isIkesaki ? "Manicure" : "Acessorios" },
+    { CODBARRAS: "7891000000066", PRODUTO: isIkesaki ? "Secador Profissional" : "Leave-in Reparador", CATEGORIA: isIkesaki ? "Equipamentos" : "Tratamento", FAMILIA: isIkesaki ? "Equipamentos" : "Finalizacao" }
   ];
 
-  const meses = ["Jun", "Jul", "Ago"];
+  const mesesInfo = [
+    { mes: "Jun", num: 6, dias: [3, 10, 17, 24] },
+    { mes: "Jul", num: 7, dias: [3, 10, 17, 24] },
+    { mes: "Ago", num: 8, dias: [3, 10, 17, 21] }
+  ];
   const anos = ["2026"];
-  const dias = ["2026-06-03", "2026-06-10", "2026-06-17", "2026-06-24", "2026-07-03", "2026-07-10", "2026-07-17", "2026-07-24", "2026-08-03", "2026-08-10", "2026-08-17", "2026-08-21"];
+  const meses = mesesInfo.map(m => m.mes);
+  const catByGtin = Object.fromEntries(categorias.map(c => [c.CODBARRAS, c]));
 
-  const fator = isGeo ? 0.78 : isIkesaki ? 0.92 : 1;
-  const porLoja = lojas.map((loja, idx) => ({
-    loja: loja.Cod_Loja,
-    nome: loja.Nome_Fantasia,
-    qty: Math.round((3200 - idx * 310) * fator),
-    valor: Math.round((218000 - idx * 18000) * fator)
-  }));
-  const porDia = dias.map((data, idx) => ({
-    data,
-    qty: Math.round((620 + (idx % 4) * 95 + idx * 12) * fator),
-    valor: Math.round((42800 + (idx % 4) * 7100 + idx * 850) * fator)
-  }));
-  const porCat = categorias.map((cat, idx) => ({
-    cat: cat.CATEGORIA,
-    qty: Math.round((2850 - idx * 260) * fator),
-    valor: Math.round((184000 - idx * 17000) * fator)
-  }));
-  const porFam = [...new Map(categorias.map(c => [c.FAMILIA, c])).values()].map((cat, idx) => ({
-    fam: cat.FAMILIA,
-    qty: Math.round((3350 - idx * 410) * fator),
-    valor: Math.round((221000 - idx * 27000) * fator)
-  }));
-  const porProduto = categorias.map((cat, idx) => ({
-    produto: cat.PRODUTO,
-    nome: cat.PRODUTO,
-    gtin: cat.CODBARRAS,
-    qty: Math.round((1240 - idx * 115) * fator),
-    valor: Math.round((76000 - idx * 6800) * fator)
-  }));
+  function iso(mesNum, dia) {
+    return `2026-${String(mesNum).padStart(2, "0")}-${String(dia).padStart(2, "0")}`;
+  }
 
-  const estoqueLoja = porLoja.map((r, idx) => ({
-    loja: r.loja,
-    nome: r.nome,
-    data: "2026-08-21",
-    qty: Math.round((r.qty * 1.7) + idx * 240),
-    valor: Math.round(r.valor * 0.62)
-  }));
-  const estoqueDia = dias.map((data, idx) => ({
-    data,
-    qty: Math.round((8100 + idx * 180 + (idx % 3) * 420) * fator),
-    valor: Math.round((380000 + idx * 9800) * fator)
-  }));
-  const estoqueLojaDia = dias.flatMap((data, dIdx) => lojas.map((loja, lIdx) => ({
-    data,
-    loja: loja.Cod_Loja,
-    nome: loja.Nome_Fantasia,
-    qty: Math.round((1300 + dIdx * 45 + lIdx * 120) * fator)
-  })));
-  const estoqueProdutoDia = categorias.map((cat, idx) => ({
-    data: "2026-08-21",
-    produto: cat.PRODUTO,
-    nome: cat.PRODUTO,
-    gtin: cat.CODBARRAS,
-    qty: Math.round((1480 - idx * 145) * fator)
-  }));
-  const estoqueCatDia = categorias.map((cat, idx) => ({
-    data: "2026-08-21",
-    cat: cat.CATEGORIA,
-    qty: Math.round((2750 - idx * 230) * fator)
-  }));
+  const dadosBrutos = [];
+  mesesInfo.forEach((mesInfo, mIdx) => {
+    mesInfo.dias.forEach((dia, dIdx) => {
+      lojas.forEach((loja, lIdx) => {
+        categorias.forEach((cat, cIdx) => {
+          const base = 9 + mIdx * 4 + dIdx * 2 + lIdx * 3 + cIdx;
+          const qtd = Math.max(1, Math.round(base * fator));
+          const preco = 42 + cIdx * 8 + lIdx * 2;
+          const valor = qtd * preco;
+          dadosBrutos.push({
+            Data: iso(mesInfo.num, dia),
+            Ano: "2026",
+            "MÃªs": mesInfo.mes,
+            "Mês": mesInfo.mes,
+            Mes: String(mesInfo.num),
+            Loja: loja.Cod_Loja,
+            "GTIN/PLU": cat.CODBARRAS,
+            Ean: cat.CODBARRAS,
+            Produto: cat.PRODUTO,
+            "Venda (Qtd)": qtd,
+            "Venda (R$)": valor,
+            "Faturamento (Unid)": qtd,
+            "Faturamento (R$)": valor,
+            "Estoque Diario": Math.round(qtd * (2.4 + (cIdx % 3) * 0.45) + lIdx * 7),
+            "Quantidade em Estoque": Math.round(qtd * (2.4 + (cIdx % 3) * 0.45) + lIdx * 7)
+          });
+        });
+      });
+    });
+  });
 
-  const dadosBrutos = dias.flatMap((data, dIdx) => lojas.map((loja, lIdx) => {
-    const cat = categorias[(dIdx + lIdx) % categorias.length];
-    const qtd = Math.round((42 + dIdx * 3 + lIdx * 5) * fator);
-    const valor = qtd * (58 + (lIdx * 7));
-    return {
-      Data: data,
-      Ano: "2026",
-      "Mês": meses[Math.min(2, Math.floor(dIdx / 4))],
-      Mes: String(Math.min(8, 6 + Math.floor(dIdx / 4))),
-      Loja: loja.Cod_Loja,
-      "GTIN/PLU": cat.CODBARRAS,
-      Produto: cat.PRODUTO,
-      "Venda (Qtd)": qtd,
-      "Venda (R$)": valor,
-      "Estoque Diario": Math.round(qtd * 2.4)
-    };
-  }));
+  function values(params, key) {
+    return params.getAll(key).map(String).filter(Boolean);
+  }
 
-  function agregado() {
+  function inList(list, actual) {
+    return !list.length || list.includes(String(actual ?? ""));
+  }
+
+  function catOf(row) {
+    return catByGtin[String(row["GTIN/PLU"])] || {};
+  }
+
+  function qtyOf(row) {
+    return Number(row["Venda (Qtd)"] || row["Faturamento (Unid)"] || 0);
+  }
+
+  function valorOf(row) {
+    return Number(row["Venda (R$)"] || row["Faturamento (R$)"] || 0);
+  }
+
+  function estoqueOf(row) {
+    return Number(row["Estoque Diario"] || row["Quantidade em Estoque"] || 0);
+  }
+
+  function lojaNome(cod) {
+    return lojas.find(l => l.Cod_Loja === String(cod))?.Nome_Fantasia || `Filial ${cod}`;
+  }
+
+  function filterRows(params, rows = dadosBrutos) {
+    const anosSel = values(params, "ano");
+    const mesesSel = values(params, "mes");
+    const lojasSel = values(params, "loja");
+    const catsSel = values(params, "cat");
+    const famsSel = values(params, "familia");
+    const produtosSel = values(params, "produto");
+    const produtoGtinsSel = values(params, "produto_gtin");
+    const ativoLoja = params.get("ativo_loja");
+    const ativoCat = params.get("ativo_cat");
+    const ativoFam = params.get("ativo_familia");
+    const di = params.get("di");
+    const df = params.get("df");
+
+    return rows.filter(row => {
+      const cat = catOf(row);
+      const data = String(row.Data || "");
+      if (!inList(anosSel, row.Ano)) return false;
+      if (!inList(mesesSel, row["MÃªs"] || row["Mês"] || row.Mes)) return false;
+      if (!inList(lojasSel, row.Loja)) return false;
+      if (!inList(catsSel, cat.CATEGORIA)) return false;
+      if (!inList(famsSel, cat.FAMILIA)) return false;
+      if (!inList(produtosSel, cat.PRODUTO)) return false;
+      if (!inList(produtoGtinsSel, cat.CODBARRAS)) return false;
+      if (ativoLoja && row.Loja !== ativoLoja) return false;
+      if (ativoCat && cat.CATEGORIA !== ativoCat) return false;
+      if (ativoFam && cat.FAMILIA !== ativoFam) return false;
+      if (di && data < di) return false;
+      if (df && data > df) return false;
+      return true;
+    });
+  }
+
+  function group(rows, keyFn, qtyFn = qtyOf, valorFn = valorOf) {
+    const map = new Map();
+    rows.forEach(row => {
+      const key = keyFn(row);
+      if (!key) return;
+      if (!map.has(key)) map.set(key, { key, qty: 0, valor: 0 });
+      const item = map.get(key);
+      item.qty += qtyFn(row);
+      item.valor += valorFn(row);
+    });
+    return [...map.values()].sort((a, b) => b.qty - a.qty);
+  }
+
+  function agregado(params = new URLSearchParams()) {
+    const rows = filterRows(params);
+    const porLoja = group(rows, r => r.Loja).map(r => ({ loja: r.key, qty: r.qty, valor: r.valor }));
+    const porDia = group(rows, r => r.Data).sort((a, b) => a.key.localeCompare(b.key)).map(r => ({ data: r.key, qty: r.qty, valor: r.valor }));
+    const porCat = group(rows, r => catOf(r).CATEGORIA || "Sem mapeamento").map(r => ({ cat: r.key, qty: r.qty, valor: r.valor }));
+    const porFam = group(rows, r => catOf(r).FAMILIA || "Sem mapeamento").map(r => ({ fam: r.key, qty: r.qty, valor: r.valor }));
+    const porProduto = group(rows, r => catOf(r).PRODUTO || r.Produto || "SEM PRODUTO").map(r => ({ produto: r.key, nome: r.key, qty: r.qty, valor: r.valor }));
+    const porCatDiaMap = group(rows, r => `${catOf(r).CATEGORIA || "Sem mapeamento"}|${r.Data}`);
+    const porFamDiaMap = group(rows, r => `${catOf(r).FAMILIA || "Sem mapeamento"}|${r.Data}`);
     return {
       por_loja: porLoja,
       por_dia: porDia,
       por_cat: porCat,
       por_fam: porFam,
       por_produto: porProduto,
-      total: porDia.reduce((s, r) => s + r.qty, 0),
-      total_valor: porDia.reduce((s, r) => s + r.valor, 0),
-      total_lojas: lojas.length
+      por_cat_dia: porCatDiaMap.map(r => { const [cat, data] = r.key.split("|"); return { cat, data, qty: r.qty, valor: r.valor }; }),
+      por_fam_dia: porFamDiaMap.map(r => { const [fam, data] = r.key.split("|"); return { fam, data, qty: r.qty, valor: r.valor }; }),
+      total: rows.reduce((s, r) => s + qtyOf(r), 0),
+      total_valor: rows.reduce((s, r) => s + valorOf(r), 0),
+      total_lojas: new Set(rows.map(r => r.Loja)).size
     };
   }
 
-  function estoque() {
+  function estoque(params = new URLSearchParams()) {
+    const rows = filterRows(params);
+    const porLoja = group(rows, r => r.Loja, estoqueOf, () => 0).map(r => ({ loja: r.key, nome: lojaNome(r.key), qty: r.qty }));
+    const porDia = group(rows, r => r.Data, estoqueOf, () => 0).sort((a, b) => a.key.localeCompare(b.key)).map(r => ({ data: r.key, qty: r.qty }));
+    const porLojaDia = group(rows, r => `${r.Loja}|${r.Data}`, estoqueOf, () => 0).map(r => { const [loja, data] = r.key.split("|"); return { loja, nome: lojaNome(loja), data, qty: r.qty }; });
+    const porProduto = group(rows, r => catOf(r).PRODUTO || r.Produto || "SEM PRODUTO", estoqueOf, () => 0).map(r => ({ nome: r.key, produto: r.key, qty: r.qty }));
+    const porProdutoDia = group(rows, r => `${catOf(r).PRODUTO || r.Produto}|${r.Data}`, estoqueOf, () => 0).map(r => { const [nome, data] = r.key.split("|"); return { nome, produto: nome, data, qty: r.qty }; });
+    const porCat = group(rows, r => catOf(r).CATEGORIA || "SEM CATEGORIA", estoqueOf, () => 0).map(r => ({ cat: r.key, qty: r.qty }));
+    const porCatDia = group(rows, r => `${catOf(r).CATEGORIA || "SEM CATEGORIA"}|${r.Data}`, estoqueOf, () => 0).map(r => { const [cat, data] = r.key.split("|"); return { cat, data, qty: r.qty }; });
+    const porFam = group(rows, r => catOf(r).FAMILIA || "SEM FAMÍLIA", estoqueOf, () => 0).map(r => ({ fam: r.key, qty: r.qty }));
+    const porFamDia = group(rows, r => `${catOf(r).FAMILIA || "SEM FAMÍLIA"}|${r.Data}`, estoqueOf, () => 0).map(r => { const [fam, data] = r.key.split("|"); return { fam, data, qty: r.qty }; });
     return {
-      total: estoqueLoja.reduce((s, r) => s + r.qty, 0),
-      total_lojas: lojas.length,
-      data: "2026-08-21",
-      por_loja: estoqueLoja,
-      por_dia: estoqueDia,
-      por_loja_dia: estoqueLojaDia,
-      por_produto_dia: estoqueProdutoDia,
-      por_cat_dia: estoqueCatDia,
-      por_produto: estoqueProdutoDia,
-      por_cat: estoqueCatDia
+      total: rows.reduce((s, r) => s + estoqueOf(r), 0),
+      total_lojas: new Set(rows.map(r => r.Loja)).size,
+      data: rows.map(r => r.Data).sort().at(-1) || "",
+      por_loja: porLoja,
+      por_dia: porDia,
+      por_loja_dia: porLojaDia,
+      por_produto: porProduto,
+      por_produto_dia: porProdutoDia,
+      por_cat: porCat,
+      por_cat_dia: porCatDia,
+      por_fam: porFam,
+      por_fam_dia: porFamDia
     };
   }
 
-  function bodyFor(url, init) {
-    const u = new URL(String(url), location.origin);
+  function responseFor(url, init) {
+    const baseUrl = location.origin && location.origin !== "null" ? location.origin : "https://portfolio.local";
+    const u = new URL(String(url), baseUrl);
     const path = u.pathname;
+    const params = u.searchParams;
     if (!path.startsWith("/api/")) return null;
 
     if (path === "/api/config") return { readOnly: true, ambiente: "portfolio", demo: true, cliente: nomePainel };
     if (path === "/api/health") return { ok: true, db: dbName, mongo: "mocked" };
     if (path === "/api/lojas-depara") return lojas;
     if (path === "/api/categorias-depara") return categorias;
-    if (path === "/api/dados-brutos") return dadosBrutos;
-    if (path === "/api/dados-tratados") return dadosBrutos;
+    if (path === "/api/dados-brutos" || path === "/api/dados-tratados") return filterRows(params);
     if (path === "/api/dashboard/filtros") return { anos, meses, lojas: lojas.map(l => l.Cod_Loja) };
-    if (path === "/api/dashboard/categorias") return porCat.map(r => ({ _id: r.cat, total: r.qty, valor: r.valor }));
-    if (path === "/api/dashboard/familias") return porFam.map(r => ({ _id: r.fam, total: r.qty, valor: r.valor }));
+    if (path === "/api/dashboard/categorias") return agregado(params).por_cat.map(r => ({ _id: r.cat, total: r.qty, valor: r.valor }));
+    if (path === "/api/dashboard/familias") return agregado(params).por_fam.map(r => ({ _id: r.fam, total: r.qty, valor: r.valor }));
     if (path === "/api/dashboard/resumo" || path === "/api/dashboard/kpis") {
-      const ag = agregado();
-      return { total_vendido: ag.total, total_lojas: lojas.length, total_valor: ag.total_valor, cliente: nomePainel };
+      const ag = agregado(params);
+      return { total_vendido: ag.total, total_lojas: ag.total_lojas, total_valor: ag.total_valor, cliente: nomePainel };
     }
-    if (path === "/api/dashboard/agregados") return agregado();
-    if (path === "/api/dashboard/estoque" || path === "/api/dashboard/estoque-resumo") return estoque();
+    if (path === "/api/dashboard/agregados") return agregado(params);
+    if (path === "/api/dashboard/estoque" || path === "/api/dashboard/estoque-resumo") return estoque(params);
     if (path === "/api/login" || path === "/api/admin/login") return { token: "portfolio-demo-token" };
     if (path === "/api/logout" || path === "/api/admin/logout") return { ok: true };
     if (path === "/api/solicitar-reset" || path === "/api/admin/solicitar-reset") return { ok: true, mensagem: "Demo: e-mail ficticio enviado." };
     if (path === "/api/admin/usuarios") return [{ _id: "u1", usuario: "analista.demo", email: "demo@portfolio.local" }];
     if (path === "/api/admin/admins") return [{ _id: "a1", usuario: "larissa.demo", email: "demo@portfolio.local", usuarioPai: true }];
     if (path === "/api/admin/templates") return [
-      { filename: "modelo_dados_brutos.csv", tipo: "dados_brutos", total: 120 },
-      { filename: "modelo_categorias_depara.xlsx", tipo: "categorias_depara", total: 5 },
-      { filename: "modelo_lojas_depara.csv", tipo: "lojas_depara", total: 5 }
+      { filename: "modelo_dados_brutos.csv", tipo: "dados_brutos", total: dadosBrutos.length },
+      { filename: "modelo_categorias_depara.xlsx", tipo: "categorias_depara", total: categorias.length },
+      { filename: "modelo_lojas_depara.csv", tipo: "lojas_depara", total: lojas.length }
     ];
     if (path === "/api/admin/logs-importacao") return [
       { _id: "log1", tipo: "dados_brutos", arquivo: `dados_${nomePainel.toLowerCase()}_demo.csv`, usuario: "analista.demo", total: dadosBrutos.length, data: "2026-08-21T12:00:00.000Z" },
       { _id: "log2", tipo: "categorias_depara", arquivo: "categorias_demo.xlsx", usuario: "analista.demo", total: categorias.length, data: "2026-08-20T12:00:00.000Z" }
     ];
     if (path.startsWith("/api/importar/")) return { ok: true, inserido: dadosBrutos.length, ultimo: true, mensagem: "Demo estatica: importacao simulada com dados ficticios." };
+    if (path.startsWith("/api/templates/")) return "Arquivo,Descricao\nmodelo_demo,Conteudo ficticio para portfolio\n";
     if (path.startsWith("/api/admin/") || path === "/api/cache/limpar" || path === "/api/importar/dados-brutos/cancelar") return { ok: true };
-    if (path.startsWith("/api/templates/")) {
-      return "Arquivo,Descricao\nmodelo_demo,Conteudo ficticio para portfolio\n";
-    }
     return { ok: true, demo: true };
   }
 
   const realFetch = window.fetch.bind(window);
   window.fetch = function (url, init = {}) {
-    const body = bodyFor(url, init);
+    const body = responseFor(url, init);
     if (body === null) return realFetch(url, init);
     const isText = typeof body === "string";
     return Promise.resolve(new Response(isText ? body : JSON.stringify(body), {
@@ -201,10 +260,13 @@
     setRequestHeader(key, value) {
       this.headers[key] = value;
     }
+    getResponseHeader(name) {
+      return name && name.toLowerCase() === "content-type" ? "application/json; charset=utf-8" : null;
+    }
     send() {
       setTimeout(() => {
         if (typeof this.upload.onprogress === "function") this.upload.onprogress({ lengthComputable: true, loaded: 100, total: 100 });
-        const body = bodyFor(this.url, { method: this.method }) || { ok: true };
+        const body = responseFor(this.url, { method: this.method }) || { ok: true };
         this.status = 200;
         this.readyState = 4;
         this.responseText = typeof body === "string" ? body : JSON.stringify(body);
@@ -215,6 +277,5 @@
     abort() {}
   }
   window.XMLHttpRequest = MockXHR;
-
-  window.__PORTFOLIO_DEMO__ = true;
+  window.__PORTFOLIO_DEMO__ = { cliente: nomePainel, linhas: dadosBrutos.length };
 })();
