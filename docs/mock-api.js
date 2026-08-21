@@ -49,7 +49,7 @@
           dadosBrutos.push({
             Data: iso(mesInfo.num, dia),
             Ano: "2026",
-            "MÃªs": mesInfo.mes,
+            "Mês": mesInfo.mes,
             "Mês": mesInfo.mes,
             Mes: String(mesInfo.num),
             Loja: loja.Cod_Loja,
@@ -114,7 +114,7 @@
       const cat = catOf(row);
       const data = String(row.Data || "");
       if (!inList(anosSel, row.Ano)) return false;
-      if (!inList(mesesSel, row["MÃªs"] || row["Mês"] || row.Mes)) return false;
+      if (!inList(mesesSel, row["Mês"] || row["Mês"] || row.Mes)) return false;
       if (!inList(lojasSel, row.Loja)) return false;
       if (!inList(catsSel, cat.CATEGORIA)) return false;
       if (!inList(famsSel, cat.FAMILIA)) return false;
@@ -272,10 +272,28 @@
         this.responseText = typeof body === "string" ? body : JSON.stringify(body);
         if (typeof this.onload === "function") this.onload();
         if (typeof this.onreadystatechange === "function") this.onreadystatechange();
-      }, 350);
+      }, 0);
     }
     abort() {}
   }
   window.XMLHttpRequest = MockXHR;
+
+  if (!window.Chart) {
+    class PortfolioChartFallback {
+      constructor(canvas, config) {
+        this.canvas = canvas;
+        this.config = config || {};
+        const wrap = canvas && canvas.parentElement;
+        if (wrap) {
+          const state = wrap.querySelector('.state-msg');
+          if (state) state.style.display = 'none';
+        }
+      }
+      destroy() {}
+      update() {}
+      resize() {}
+    }
+    window.Chart = PortfolioChartFallback;
+  }
   window.__PORTFOLIO_DEMO__ = { cliente: nomePainel, linhas: dadosBrutos.length };
 })();
