@@ -1,4 +1,8 @@
 (function () {
+  try {
+    sessionStorage.setItem("adm_token", "portfolio-demo-token");
+    sessionStorage.setItem("gu_token", "portfolio-demo-token");
+  } catch (_) {}
   const repo = (location.pathname || "").toLowerCase();
   const isGeo = repo.includes("geo");
   const isIkesaki = repo.includes("ikesaki");
@@ -199,7 +203,7 @@
     const params = u.searchParams;
     if (!path.startsWith("/api/")) return null;
 
-    if (path === "/api/config") return { readOnly: true, ambiente: "portfolio", demo: true, cliente: nomePainel };
+    if (path === "/api/config") return { readOnly: false, ambiente: "portfolio", demo: true, cliente: nomePainel };
     if (path === "/api/health") return { ok: true, db: dbName, mongo: "mocked" };
     if (path === "/api/lojas-depara") return lojas;
     if (path === "/api/categorias-depara") return categorias;
