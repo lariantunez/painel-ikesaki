@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Painel Ikesaki | Demo estatica</title>
+  <style>
+    :root { --bg:#111316; --panel:#181e25; --panel-2:#232b34; --text:#f5f7fb; --muted:#9da8b6; --line:#2d3742; --accent:#ffcf5a; --accent-2:#53d6bd; --warn:#ff8f70; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:Inter, Segoe UI, Arial, sans-serif; background:var(--bg); color:var(--text); }
+    .shell { min-height:100vh; display:grid; grid-template-columns:250px 1fr; }
+    aside { border-right:1px solid var(--line); padding:24px 18px; background:#0d1014; }
+    .brand { font-weight:800; font-size:1.15rem; margin-bottom:6px; }
+    .tag { color:var(--muted); font-size:.82rem; line-height:1.45; }
+    nav { margin-top:28px; display:grid; gap:8px; }
+    nav button, .chip, select { border:1px solid var(--line); background:var(--panel); color:var(--text); border-radius:8px; padding:10px 12px; font:inherit; }
+    nav button { text-align:left; cursor:pointer; }
+    nav button.active { border-color:var(--accent); color:var(--accent); }
+    main { padding:28px; overflow:hidden; }
+    .topbar { display:flex; justify-content:space-between; gap:16px; align-items:flex-start; margin-bottom:22px; }
+    h1 { margin:0 0 8px; font-size:clamp(1.6rem,4vw,2.7rem); letter-spacing:0; }
+    .subtitle { margin:0; color:var(--muted); max-width:780px; line-height:1.55; }
+    .filters { display:flex; gap:10px; flex-wrap:wrap; justify-content:flex-end; }
+    .grid { display:grid; gap:14px; }
+    .kpis { grid-template-columns:repeat(4,minmax(150px,1fr)); }
+    .card { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:16px; }
+    .label { color:var(--muted); font-size:.78rem; text-transform:uppercase; letter-spacing:.08em; }
+    .value { font-size:1.75rem; font-weight:800; margin-top:8px; }
+    .delta { margin-top:8px; color:var(--accent); font-size:.86rem; }
+    .content { grid-template-columns:1.3fr .7fr; margin-top:14px; align-items:stretch; }
+    .section-title { display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; }
+    h2 { margin:0; font-size:1rem; }
+    .bars { display:grid; gap:12px; }
+    .bar-row { display:grid; grid-template-columns:86px 1fr 88px; gap:10px; align-items:center; color:var(--muted); font-size:.88rem; }
+    .track { height:12px; background:#0e1319; border-radius:999px; overflow:hidden; }
+    .fill { height:100%; background:linear-gradient(90deg,var(--accent),var(--accent-2)); border-radius:inherit; }
+    .table { display:grid; gap:8px; }
+    .row { display:grid; grid-template-columns:1fr 82px 82px; gap:10px; padding:10px 0; border-bottom:1px solid var(--line); color:var(--muted); }
+    .row strong { color:var(--text); }
+    .flow { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-top:14px; }
+    .step { background:var(--panel-2); border:1px solid var(--line); border-radius:8px; padding:14px; min-height:112px; }
+    .step b { display:block; margin-bottom:8px; color:var(--accent); }
+    .screen { margin-top:14px; min-height:360px; background:#0d1218; border:1px solid var(--line); border-radius:8px; padding:18px; display:grid; grid-template-columns:220px 1fr; gap:18px; }
+    .mini-side { background:#111821; border-radius:8px; padding:14px; display:grid; align-content:start; gap:10px; }
+    .mini-nav { height:34px; border-radius:7px; background:var(--panel-2); }
+    .mini-nav.on { background:var(--accent); }
+    .mini-main { display:grid; gap:12px; }
+    .mini-chart { height:170px; display:flex; align-items:end; gap:8px; padding:12px; border-radius:8px; background:var(--panel); }
+    .col { flex:1; min-width:12px; background:linear-gradient(180deg,var(--accent),var(--accent-2)); border-radius:6px 6px 0 0; }
+    .note { margin-top:12px; color:var(--muted); font-size:.9rem; line-height:1.5; }
+    @media (max-width:900px) { .shell,.kpis,.content,.flow,.screen { grid-template-columns:1fr; } aside { border-right:0; border-bottom:1px solid var(--line); } .topbar,.filters { display:block; } .filters { margin-top:14px; } }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside>
+      <div class="brand">Painel Ikesaki</div>
+      <div class="tag">Demo estatica com dados ficticios para portfolio. Sem banco, sem servidor e sem dados confidenciais.</div>
+      <nav>
+        <button class="active" data-view="dashboard">Dashboard</button>
+        <button data-view="importacao">Importacao</button>
+        <button data-view="admin">Administracao</button>
+      </nav>
+    </aside>
+    <main>
+      <div class="topbar">
+        <div>
+          <h1>Visao comercial Ikesaki</h1>
+          <p class="subtitle">Painel criado para acompanhar vendas, faturamento e estoque, incluindo rotina especifica de contagem manual com modelo de planilha.</p>
+        </div>
+        <div class="filters">
+          <select id="periodo"><option value="jun">Jun/2026</option><option value="jul">Jul/2026</option><option value="ago">Ago/2026</option></select>
+          <span class="chip">Modo portfolio</span>
+        </div>
+      </div>
+      <section id="dashboard" class="view">
+        <div class="grid kpis" id="kpis"></div>
+        <div class="grid content">
+          <div class="card"><div class="section-title"><h2>Venda por dia</h2><span class="label">sell out</span></div><div class="bars" id="bars"></div></div>
+          <div class="card"><div class="section-title"><h2>Top categorias</h2><span class="label">ranking</span></div><div class="table" id="ranking"></div></div>
+        </div>
+        <div class="screen"><div class="mini-side"><div class="mini-nav on"></div><div class="mini-nav"></div><div class="mini-nav"></div><div class="mini-nav"></div></div><div class="mini-main"><div class="grid kpis"><div class="card"></div><div class="card"></div><div class="card"></div><div class="card"></div></div><div class="mini-chart" id="miniChart"></div></div></div>
+      </section>
+      <section id="importacao" class="view" hidden>
+        <div class="card"><div class="section-title"><h2>Fluxo de importacao</h2><span class="label">simulado</span></div><div class="flow"><div class="step"><b>1. Dados brutos</b>Arquivo de sell out e carregado e validado.</div><div class="step"><b>2. Normalizacao</b>Datas, meses, EAN e valores sao tratados.</div><div class="step"><b>3. Estoque manual</b>Modelo XLSX permite incluir contagem por filial e produto.</div><div class="step"><b>4. Dashboard</b>Indicadores atualizados ficam prontos para analise.</div></div></div>
+        <p class="note">Na aplicacao real, importacoes e estoque sao persistidos no MongoDB. A demo usa dados ficticios embutidos no HTML.</p>
+      </section>
+      <section id="admin" class="view" hidden>
+        <div class="grid content"><div class="card"><h2>Controles administrativos</h2><p class="note">Usuarios, admins, templates, logs e reset de senha compoem a area administrativa real.</p></div><div class="card"><h2>Portfolio seguro</h2><p class="note">Bases reais, credenciais e uploads nao sao publicados. O modelo de estoque vazio demonstra a funcionalidade sem expor dados.</p></div></div>
+      </section>
+    </main>
+  </div>
+  <script>
+    const dados = {
+      jun:{vendas:10210,valor:689500,estoque:24500,ruptura:6.9,dias:[58,66,72,69,80,87,91],cats:[["Coloracao",219],["Tratamento",188],["Unhas",146],["Equipamentos",102]]},
+      jul:{vendas:11380,valor:742120,estoque:23280,ruptura:6.2,dias:[61,70,75,83,79,91,96],cats:[["Tratamento",236],["Coloracao",221],["Unhas",153],["Acessorios",119]]},
+      ago:{vendas:9870,valor:654880,estoque:25190,ruptura:5.8,dias:[54,63,68,72,78,84,88],cats:[["Coloracao",204],["Tratamento",193],["Unhas",141],["Equipamentos",111]]}
+    };
+    const moeda = n => n.toLocaleString("pt-BR",{style:"currency",currency:"BRL",maximumFractionDigits:0});
+    function render(){const d=dados[periodo.value];kpis.innerHTML=[["Vendas",d.vendas.toLocaleString("pt-BR"),"+10% vs. periodo anterior"],["Valor vendido",moeda(d.valor),"+7% de crescimento"],["Estoque",d.estoque.toLocaleString("pt-BR"),"contagem monitorada"],["Ruptura",d.ruptura.toFixed(1)+"%","alerta por filial"]].map(k=>`<div class="card"><div class="label">${k[0]}</div><div class="value">${k[1]}</div><div class="delta">${k[2]}</div></div>`).join("");bars.innerHTML=d.dias.map((v,i)=>`<div class="bar-row"><span>Dia ${String(i+1).padStart(2,"0")}</span><div class="track"><div class="fill" style="width:${v}%"></div></div><strong>${v*10}</strong></div>`).join("");ranking.innerHTML=d.cats.map((r,i)=>`<div class="row"><strong>${i+1}. ${r[0]}</strong><span>${r[1]} itens</span><span>${moeda(r[1]*890)}</span></div>`).join("");miniChart.innerHTML=d.dias.map(v=>`<div class="col" style="height:${v}%"></div>`).join("")}
+    document.querySelectorAll("nav button").forEach(btn=>btn.addEventListener("click",()=>{document.querySelectorAll("nav button").forEach(b=>b.classList.remove("active"));btn.classList.add("active");document.querySelectorAll(".view").forEach(v=>v.hidden=v.id!==btn.dataset.view)}));
+    periodo.addEventListener("change",render); render();
+  </script>
+</body>
+</html>

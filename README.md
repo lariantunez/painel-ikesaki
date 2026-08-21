@@ -68,6 +68,10 @@ npm install
 npm start
 ```
 
+## Demo estatica
+
+Este repositorio tambem possui uma demo visual em `docs/index.html`, criada para GitHub Pages e portfolio. Ela usa dados ficticios embutidos no proprio HTML, sem depender de MongoDB, backend ou variaveis de ambiente.
+
 ## Cuidados de portfolio
 
 O repositorio deve permanecer sem bases reais, credenciais, uploads e planilhas operacionais. Apenas o modelo vazio de contagem de estoque e mantido para demonstrar a funcionalidade.
